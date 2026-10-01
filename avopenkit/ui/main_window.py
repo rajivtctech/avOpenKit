@@ -6,16 +6,17 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from PyQt6.QtCore import Qt, QUrl
+from PyQt6.QtCore import QSettings, Qt, QUrl
 from PyQt6.QtGui import QDesktopServices, QFontDatabase, QGuiApplication
-from PyQt6.QtWidgets import (QFileDialog, QFrame, QHBoxLayout, QLabel, QLineEdit, QListWidget,
-                             QMainWindow, QMessageBox, QPlainTextEdit, QProgressBar,
-                             QPushButton, QSplitter, QStackedWidget, QVBoxLayout, QWidget)
+from PyQt6.QtWidgets import (QCheckBox, QFileDialog, QFrame, QHBoxLayout, QLabel, QLineEdit,
+                             QListWidget, QMainWindow, QMessageBox, QPlainTextEdit,
+                             QProgressBar, QPushButton, QSplitter, QStackedWidget, QVBoxLayout,
+                             QWidget)
 
 from .. import __version__
 from ..core import errors
 from ..core.ffmpeg import Tools
-from ..core.job import PLUMBING, Plan, command_line
+from ..core.job import PLUMBING, CommandError, Plan, command_line, edited_plan
 from ..core.probe import MediaInfo, ProbeError, probe
 from ..core.runner import JobRunner
 from ..tasks.base import TaskError, clock
@@ -36,7 +37,12 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.tools = tools
         self.media: MediaInfo | None = None
-        self.plan: Plan | None = None
+        self.plan: Plan | None = None          # what Run will run
+        self._form_plan: Plan | None = None    # what the form asks for, before any hand edit
+        self._edited = False                   # the command was changed by hand (spec F2)
+        self._setting_console = False
+        self._result: Path | None = None
+        self.settings = QSettings()
         self._output_custom = False
         self._workdir = Path(tempfile.mkdtemp(prefix="avopenkit-"))
         self.runner = JobRunner(tools, self)
@@ -49,6 +55,8 @@ class MainWindow(QMainWindow):
         self.runner.job_started.connect(self._on_job_started)
         self.runner.finished.connect(self._on_finished)
         self.tasks.setCurrentRow(0)
+        self.expert_box.setChecked(self.settings.value("expert", False, type=bool))
+        self._apply_mode()
         self.refresh()
 
     # ------------------------------------------------------------------ layout
@@ -75,9 +83,14 @@ class MainWindow(QMainWindow):
         open_button.clicked.connect(self._open_dialog)
         self.file_label = QLabel(self.tr("No file open. Drop a file here, or use Open."))
         self.file_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        self.expert_box = QCheckBox(self.tr("Expert mode"))
+        self.expert_box.setToolTip(self.tr("Show codec-level options and allow the command "
+                                           "to be edited before it runs."))
+        self.expert_box.toggled.connect(self._mode_toggled)
         file_row = QHBoxLayout()
         file_row.addWidget(open_button)
         file_row.addWidget(self.file_label, 1)
+        file_row.addWidget(self.expert_box)
 
         self.inspector = QLabel("")
         self.inspector.setWordWrap(True)
@@ -107,6 +120,20 @@ class MainWindow(QMainWindow):
         self.console.setFont(mono)
         self.console.setMaximumHeight(130)
         self.console.setPlaceholderText(self.tr("The FFmpeg command will appear here."))
+        self.console.textChanged.connect(self._console_changed)
+        self.edited_label = QLabel(self.tr("Edited by hand. The form above is ignored until "
+                                           "you press Reset."))
+        self.edited_label.setWordWrap(True)
+        self.reset_button = QPushButton(self.tr("Reset"))
+        self.reset_button.setToolTip(self.tr("Discard the edit and show the command the form "
+                                             "produces."))
+        self.reset_button.clicked.connect(self._reset_edit)
+        self.edited_row = QWidget()
+        edited_layout = QHBoxLayout(self.edited_row)
+        edited_layout.setContentsMargins(0, 0, 0, 0)
+        edited_layout.addWidget(self.edited_label, 1)
+        edited_layout.addWidget(self.reset_button)
+        self.edited_row.setVisible(False)
         self.plumbing = QLabel(self.tr("avOpenKit also adds, to follow progress and never "
                                        "overwrite a file: {0}").format(" ".join(PLUMBING) + " -n"))
         self.plumbing.setWordWrap(True)
@@ -154,6 +181,7 @@ class MainWindow(QMainWindow):
         right.addLayout(out_row)
         right.addWidget(self.notes)
         right.addWidget(self.console)
+        right.addWidget(self.edited_row)
         right.addWidget(self.plumbing)
         right.addLayout(run_row)
         right.addWidget(self.progress)
@@ -205,6 +233,7 @@ class MainWindow(QMainWindow):
         for panel in self.panels:
             panel.set_media(media)
         self._output_custom = False
+        self._edited = False
         self._clear_result()
         self._sync_preview()
         self.refresh()
@@ -255,8 +284,66 @@ class MainWindow(QMainWindow):
         self.stack.setCurrentIndex(row)
         self.blurb.setText(self.panel().blurb())
         self._output_custom = False
+        self._edited = False
         self._sync_preview()
         self.refresh()
+
+    # ------------------------------------------------------------------ modes and editing
+
+    def _mode_toggled(self, on: bool) -> None:
+        self.settings.setValue("expert", on)
+        self._apply_mode()
+        self.refresh()
+
+    def _apply_mode(self) -> None:
+        """Simple: defaults, read-only command. Expert: codec options, editable command."""
+        expert = self.expert_box.isChecked()
+        if not expert:
+            self._edited = False
+        self.console.setReadOnly(not expert)
+        for panel in self.panels:
+            panel.blockSignals(True)
+            panel.set_expert(expert)
+            panel.blockSignals(False)
+
+    def _set_console(self, text: str) -> None:
+        self._setting_console = True
+        self.console.setPlainText(text)
+        self._setting_console = False
+
+    def _console_changed(self) -> None:
+        if self._setting_console or self.console.isReadOnly() or self.runner.running:
+            return
+        self._edited = True
+        self._use_edit()
+
+    def _reset_edit(self) -> None:
+        self._edited = False
+        self.refresh()
+
+    def _use_edit(self) -> None:
+        """Make the hand-edited text the plan, or say why it cannot be run."""
+        self.edited_row.setVisible(True)
+        try:
+            self.plan = edited_plan(self.console.toPlainText(), self._form_plan)
+        except CommandError as e:
+            self.plan = None
+            self.run_button.setEnabled(False)
+            self.notes.setText(self._command_error(e))
+            return
+        self.run_button.setEnabled(True)
+        self.notes.setText(self.tr(
+            "This command was edited by hand and runs as typed, so avOpenKit can no longer "
+            "say what it will do. It still never replaces a file without asking; -y and -n "
+            "in the command are ignored."))
+
+    def _command_error(self, e: CommandError) -> str:
+        return {
+            "empty": self.tr("There is no command to run."),
+            "syntax": self.tr("The command cannot be read: a quotation mark is not closed."),
+            "program": self.tr("Each line must start with ffmpeg. Other programs are not run."),
+            "over_input": self.tr("The result cannot be saved over an input file."),
+        }.get(e.code, str(e))
 
     def _sync_preview(self) -> None:
         """Show the preview for tasks that select a section, loaded with the open file."""
@@ -287,10 +374,14 @@ class MainWindow(QMainWindow):
         """Rebuild the plan from the current form and show its command (spec F1)."""
         if self.runner.running:
             return
+        if self._edited:
+            self._use_edit()
+            return
+        self.edited_row.setVisible(False)
         panel = self.panel()
         media = self._effective_media()
-        self.plan = None
-        self.console.clear()
+        self.plan = self._form_plan = None
+        self._set_console("")
         self.run_button.setEnabled(False)
         if media is None and panel.needs_media():
             self.notes.setText(self.tr("Open a file to begin."))
@@ -305,9 +396,9 @@ class MainWindow(QMainWindow):
         except TaskError as e:
             self.notes.setText(str(e))
             return
-        self.plan = plan
+        self.plan = self._form_plan = plan
         self.notes.setText("\n".join(plan.notes))
-        self.console.setPlainText("\n".join(command_line(j) for j in plan.jobs))
+        self._set_console("\n".join(command_line(j) for j in plan.jobs))
         self.run_button.setEnabled(True)
 
     # ------------------------------------------------------------------ run
@@ -338,6 +429,9 @@ class MainWindow(QMainWindow):
         self.tasks.setEnabled(not running)
         self.stack.setEnabled(not running)
         self.output.setEnabled(not running)
+        self.expert_box.setEnabled(not running)
+        self.reset_button.setEnabled(not running)
+        self.console.setReadOnly(running or not self.expert_box.isChecked())
 
     def _clear_result(self) -> None:
         self.status.setText("")
@@ -345,7 +439,7 @@ class MainWindow(QMainWindow):
         self.open_folder.setVisible(False)
 
     def _on_job_started(self, index: int, total: int) -> None:
-        label = self.plan.jobs[index].label if self.plan else ""
+        label = (self.plan.jobs[index].label if self.plan else "") or self.tr("Running")
         self.status.setText(label if total == 1 else f"{label} ({index + 1}/{total})")
 
     def _on_progress(self, overall: float, block: dict) -> None:
@@ -365,15 +459,19 @@ class MainWindow(QMainWindow):
         plan = self.plan
         if ok and plan:
             self.progress.setValue(1000)
-            out = Path(plan.outputs[-1])
-            self._result = out
-            source = self._effective_media()
-            text = self.tr("Done: {0} ({1})").format(out.name, human_size(out.stat().st_size))
-            if source and source.size:
-                text += self.tr(" - the original is {0}").format(human_size(source.size))
+            out = Path(plan.outputs[-1]) if plan.outputs else None
+            if out is not None and out.exists():
+                self._result = out
+                source = self._effective_media()
+                text = self.tr("Done: {0} ({1})").format(out.name,
+                                                         human_size(out.stat().st_size))
+                if source and source.size:
+                    text += self.tr(" - the original is {0}").format(human_size(source.size))
+                self.play.setVisible(True)
+                self.open_folder.setVisible(True)
+            else:
+                text = self.tr("Done.")
             self.status.setText(text)
-            self.play.setVisible(True)
-            self.open_folder.setVisible(True)
             self._output_custom = False      # suggest a fresh name for the next run
         elif cancelled:
             self.progress.setValue(0)
@@ -386,6 +484,8 @@ class MainWindow(QMainWindow):
         self.refresh()
 
     def _open_result(self, folder: bool) -> None:
+        if self._result is None:
+            return
         target = self._result.parent if folder else self._result
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(target)))
 

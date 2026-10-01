@@ -11,6 +11,7 @@ from .base import (TaskError, check_output, clock, need_filter, need_video, secs
                    translate)
 
 ID = "gif"
+DITHERS = ("sierra2_4a", "floyd_steinberg", "bayer", "none")
 
 
 @dataclass
@@ -20,6 +21,9 @@ class Settings:
     width: int = 480
     fps: int = 12
     output: Path | None = None
+    # Expert options.
+    loop: bool = True               # False: play once and stop
+    dither: str = "sierra2_4a"      # FFmpeg's default; "bayer" is smaller, "none" is flat
 
 
 def suggest_output(media: MediaInfo, s: Settings) -> Path:
@@ -40,12 +44,17 @@ def plan(s: Settings, media: MediaInfo, tools=None, workdir: Path | None = None)
                                            "1 to 60."))
     length = min(s.length, media.duration - s.start) if media.duration else s.length
     width = min(s.width, media.video.width) if media.video.width else s.width
+    if s.dither not in DITHERS:
+        raise TaskError(translate("tasks", "Unknown dithering method."))
+    use = "paletteuse" if s.dither == "sierra2_4a" else f"paletteuse=dither={s.dither}"
     graph = (f"fps={s.fps},scale={width}:-1:flags=lanczos,"
-             f"split[a][b];[a]palettegen[p];[b][p]paletteuse")
+             f"split[a][b];[a]palettegen[p];[b][p]{use}")
     args = ["-ss", secs(s.start), "-t", secs(length), "-i", str(media.path),
-            "-vf", graph, "-loop", "0", str(out)]
-    notes = [translate("tasks", "Makes a looping GIF from {0}, {1} long: {2} frames, {3} pixels "
-                                "wide. GIFs have no sound.")
+            "-vf", graph, "-loop", "0" if s.loop else "-1", str(out)]
+    notes = [(translate("tasks", "Makes a looping GIF from {0}, {1} long: {2} frames, {3} pixels "
+                                 "wide. GIFs have no sound.") if s.loop else
+              translate("tasks", "Makes a GIF that plays once, from {0}, {1} long: {2} frames, "
+                                 "{3} pixels wide. GIFs have no sound."))
              .format(clock(s.start), clock(length), round(length * s.fps), width),
              translate("tasks", "GIF files grow quickly: halving the width or the frame rate "
                                 "makes the file much smaller.")]

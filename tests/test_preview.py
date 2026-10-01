@@ -13,11 +13,6 @@ from avopenkit.ui.main_window import MainWindow
 from avopenkit.ui.preview import PreviewWidget
 
 
-@pytest.fixture(scope="session")
-def app():
-    return QApplication.instance() or QApplication([])
-
-
 def wait_until(app, condition, timeout=8.0):
     end = time.monotonic() + timeout
     while time.monotonic() < end:

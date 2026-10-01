@@ -7,7 +7,7 @@ from pathlib import Path
 
 from ..core.job import Job, Plan
 from ..core.probe import MediaInfo
-from .base import TaskError, check_output, need_encoder, suggest, translate
+from .base import TaskError, check_kbps, check_output, need_encoder, suggest, translate
 
 ID = "audio"
 
@@ -26,6 +26,7 @@ ENCODE = {
 class Settings:
     format: str = "copy"       # copy, mp3, m4a, opus, wav
     output: Path | None = None
+    kbps: int | None = None    # expert: bitrate for MP3, M4A or Opus instead of the default
 
 
 def extension(media: MediaInfo, s: Settings) -> str:
@@ -52,6 +53,9 @@ def plan(s: Settings, media: MediaInfo, tools=None, workdir: Path | None = None)
     else:
         _, encoder, options = ENCODE[s.format]
         need_encoder(tools, encoder)
+        check_kbps(s.kbps)
+        if s.kbps is not None and s.format != "wav":
+            options = ["-b:a", f"{s.kbps}k"]
         args += ["-c:a", encoder, *options]
         notes = [translate("tasks", "Converts the audio from {0} to {1}.")
                  .format(media.audio.codec, s.format.upper())]

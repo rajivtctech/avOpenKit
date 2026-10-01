@@ -1,6 +1,6 @@
 # avOpenKit — Design
 
-Draft 5 · 2026-10-01 · implements SPECIFICATIONS.md Rev G · first code increment written, see §7
+Draft 6 · 2026-10-01 · implements SPECIFICATIONS.md Rev G · first code increment written, see §7
 
 Everything marked *tested* was run on this machine (Ubuntu 26.04, FFmpeg 8.0.1, Python 3.14.4,
 PyQt6 6.11.0 from pip in `.venv`) by the scripts in `trials/`. Anything not marked is a proposal.
@@ -145,7 +145,19 @@ Rules that keep the layers apart (spec N7):
 - A `Job` holds the **argument list**, never a command string. The console (F1) renders the
   list as a quoted, copyable command; the runner passes the list to `QProcess` unchanged (N3).
 - An edited command (F2) is parsed back into an argument list with shell-style quoting rules
-  and marked "edited"; it is never handed to a shell.
+  and marked "edited"; it is never handed to a shell, so `;`, `|`, `>`, `$VAR` and backticks
+  are plain text. Three things stay enforced on an edited command: every line must start with
+  `ffmpeg` (no other program is run); `-y` and `-n` are removed, so replacing a file remains a
+  question the window asks; and the result may not be one of the command's own inputs.
+  FFmpeg's output is taken to be the last argument. If a command has outputs the window does
+  not know about and one exists, FFmpeg's own `-n` refuses it — the runner recognises that
+  message and reports a failure, because FFmpeg's exit status is 0 in that case.
+- **Modes (F13).** Each task's settings carry the codec-level values (CRF, encoder speed, audio
+  bitrate, and a few per task) with defaults equal to what simple mode has always produced.
+  A panel passes its expert widgets on **only in expert mode**, so a value left in a hidden
+  widget cannot change a simple-mode result; a test checks that switching to expert mode
+  without touching anything leaves every task's command unchanged. The mode is kept in
+  `QSettings`.
 - `runner.py` always adds `-nostdin -progress pipe:1 -nostats`, and `-n` (never overwrite)
   unless the user confirmed replacing a file (F3). On cancel or failure the partial output is
   deleted (F6).
@@ -200,7 +212,7 @@ re-encodes and anything that will differ from what was asked.
 
 ## 7. Code status — first increment (0.1.0)
 
-Written and tested (98 tests: unit, real FFmpeg runs checked with `ffprobe`, and the window
+Written and tested (145 tests: unit, real FFmpeg runs checked with `ffprobe`, and the window
 and preview driven without a display):
 
 - `core/`: FFmpeg detection (F15, F16 path search), probing with keyframe times, job and plan
@@ -214,9 +226,11 @@ and preview driven without a display):
   FFmpeg stills (on a player error, no picture within 4 s, or a length that disagrees with
   `ffprobe` by more than 1 s). Shown for Trim and Make a GIF, with "Start here" / "End here"
   buttons; typing a time shows that moment.
+- Simple and expert modes (F13) with expert options on every task, remembered between runs;
+  editing the command before it runs (F2), with Reset to return to the form's command.
 - All interface text goes through Qt's translation calls; `pylupdate6` extracts 180 strings.
 
-Not yet written: edit-before-run and simple/expert modes (F2, F13), job
+Not yet written: job
 queue (F8), presets (F10), hover explanations of command parts (F12), hardware encoding (F14),
 Settings and About (F16, F17), translations, Windows packaging with bundled FFmpeg, User Guide.
 

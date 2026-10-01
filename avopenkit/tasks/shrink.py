@@ -7,7 +7,8 @@ from pathlib import Path
 
 from ..core.job import Job, Plan
 from ..core.probe import MediaInfo
-from .base import TaskError, check_output, need_encoder, need_video, suggest, translate
+from .base import (TaskError, check_encode, check_kbps, check_output, need_encoder, need_video,
+                   suggest, translate)
 
 ID = "shrink"
 MB = 1_000_000           # the smaller of the two meanings of "MB", so the result stays under
@@ -23,6 +24,9 @@ class Settings:
     target_mb: float = 25.0
     audio_kbps: int = 96
     output: Path | None = None
+    # Expert options.
+    preset: str = "medium"
+    height: int | None = None  # None: choose from the bitrate. 0: keep the source size. Else: this height
 
 
 def suggest_output(media: MediaInfo, s: Settings) -> Path:
@@ -45,6 +49,10 @@ def plan(s: Settings, media: MediaInfo, tools=None, workdir: Path | None = None)
     out = check_output(s.output, [media.path])
     need_video(media)
     need_encoder(tools, "libx264")
+    check_encode(None, s.preset)
+    check_kbps(s.audio_kbps)
+    if s.height is not None and s.height != 0 and not 64 <= s.height <= 4320:
+        raise TaskError(translate("tasks", "Picture height must be between 64 and 4320."))
     if s.target_mb <= 0:
         raise TaskError(translate("tasks", "The target size must be more than zero."))
     if media.duration <= 0:
@@ -61,11 +69,16 @@ def plan(s: Settings, media: MediaInfo, tools=None, workdir: Path | None = None)
     if media.size and s.target_mb * MB >= media.size:
         notes.append(translate("tasks", "The file is already smaller than the target; "
                                         "re-encoding it will not help."))
-    video = ["-c:v", "libx264", "-b:v", f"{kbps}k", "-preset", "medium", "-pix_fmt", "yuv420p"]
-    height = target_height(kbps, media.video.height)
+    video = ["-c:v", "libx264", "-b:v", f"{kbps}k", "-preset", s.preset, "-pix_fmt", "yuv420p"]
+    if s.height is None:
+        height = target_height(kbps, media.video.height)
+    else:
+        height = s.height if s.height and s.height != media.video.height else None
     if height:
         video += ["-vf", f"scale=-2:{height}"]
-        notes.append(translate("tasks", "Picture reduced from {0}p to {1}p so it stays clear at "
+        notes.append(translate("tasks", "Picture resized from {0}p to {1}p.")
+                     .format(media.video.height, height) if s.height is not None else
+                     translate("tasks", "Picture reduced from {0}p to {1}p so it stays clear at "
                                         "this size.").format(media.video.height, height))
     notes.insert(0, translate(
         "tasks", "Re-encodes in two passes to fit {0} MB: video at {1} kbit/s, audio at {2} kbit/s.")

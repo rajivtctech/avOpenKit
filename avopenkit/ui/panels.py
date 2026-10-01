@@ -6,12 +6,13 @@ from pathlib import Path
 
 from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtWidgets import (QAbstractItemView, QButtonGroup, QCheckBox, QComboBox,
-                             QDoubleSpinBox, QFileDialog, QFormLayout, QHBoxLayout, QLabel,
-                             QLineEdit, QListWidget, QPushButton, QRadioButton, QSpinBox,
-                             QVBoxLayout, QWidget)
+                             QDoubleSpinBox, QFileDialog, QFormLayout, QGroupBox, QHBoxLayout,
+                             QLabel, QLineEdit, QListWidget, QPushButton, QRadioButton,
+                             QSpinBox, QVBoxLayout, QWidget)
 
 from ..core.probe import MediaInfo
 from ..tasks import audio, convert, gif, join, rotate, shrink, subtitles, trim
+from ..tasks.base import X264_PRESETS
 
 MEDIA_FILTER = "*.mp4 *.m4v *.mov *.mkv *.webm *.avi *.wmv *.flv *.mpg *.mpeg *.ts *.3gp " \
                "*.mp3 *.m4a *.aac *.wav *.flac *.ogg *.opus *.wma *.gif"
@@ -37,10 +38,56 @@ class TaskPanel(QWidget):
         super().__init__(parent)
         self.media: MediaInfo | None = None
         self.preview = None
+        self.expert = False
         self.form = QFormLayout(self)
+        # Codec-level options. Hidden in simple mode, and then not used either: settings()
+        # passes them on only in expert mode, so a hidden value never changes the result.
+        self.expert_box = QGroupBox(self.tr("Expert options"))
+        self.expert_form = QFormLayout(self.expert_box)
+        self.expert_box.setVisible(False)
 
     def attach_preview(self, preview) -> None:
         self.preview = preview
+
+    def set_expert(self, on: bool) -> None:
+        self.expert = on
+        self.expert_box.setVisible(on)
+        self.changed.emit()
+
+    def _finish(self) -> None:
+        """Called last by each panel: put the expert options under its ordinary rows."""
+        self.form.addRow(self.expert_box)
+
+    def _crf_box(self, default: int, maximum: int = 51) -> QSpinBox:
+        box = QSpinBox()
+        box.setRange(0, maximum)
+        box.setValue(default)
+        box.setToolTip(self.tr("Constant rate factor: lower is better quality and a larger "
+                               "file. 18 is close to lossless to the eye, 23 is FFmpeg's "
+                               "default, 28 is visibly compressed."))
+        box.valueChanged.connect(self.changed)
+        return box
+
+    def _preset_box(self) -> QComboBox:
+        box = QComboBox()
+        box.addItems(X264_PRESETS)
+        box.setCurrentText("medium")
+        box.setToolTip(self.tr("Encoder speed: slower presets make a smaller file at the same "
+                               "quality, and take longer."))
+        box.currentIndexChanged.connect(self.changed)
+        return box
+
+    def _kbps_box(self, default: int, automatic: bool = False) -> QSpinBox:
+        """Audio bitrate. With automatic=True the lowest value means 'use the default'."""
+        box = QSpinBox()
+        box.setRange(0 if automatic else 8, 512)
+        box.setSingleStep(16)
+        box.setSuffix(" kbit/s")
+        if automatic:
+            box.setSpecialValueText(self.tr("Default"))
+        box.setValue(default)
+        box.valueChanged.connect(self.changed)
+        return box
 
     def _time_row(self, box: QDoubleSpinBox, button_text: str) -> QHBoxLayout:
         """A seconds box with a button that sets it from the preview's current position."""
@@ -101,6 +148,11 @@ class TrimPanel(TaskPanel):
         self.form.addRow(self.tr("End"), self._time_row(self.end, self.tr("End here")))
         self.form.addRow(self.tr("Method"), self.fast)
         self.form.addRow("", self.exact)
+        self.crf, self.preset, self.kbps = self._crf_box(18), self._preset_box(), self._kbps_box(192)
+        self.expert_form.addRow(self.tr("Quality (CRF), exact trim"), self.crf)
+        self.expert_form.addRow(self.tr("Encoder speed, exact trim"), self.preset)
+        self.expert_form.addRow(self.tr("Audio bitrate, exact trim"), self.kbps)
+        self._finish()
         self.start.valueChanged.connect(self.changed)
         self.end.valueChanged.connect(self.changed)
 
@@ -122,7 +174,11 @@ class TrimPanel(TaskPanel):
                 box.blockSignals(False)
 
     def settings(self):
-        return trim.Settings(self.start.value(), self.end.value(), self.exact.isChecked())
+        s = trim.Settings(self.start.value(), self.end.value(), self.exact.isChecked())
+        if self.expert:
+            s.crf, s.preset, s.audio_kbps = (self.crf.value(), self.preset.currentText(),
+                                             self.kbps.value())
+        return s
 
 
 class ShrinkPanel(TaskPanel):
@@ -141,6 +197,16 @@ class ShrinkPanel(TaskPanel):
         self.audio.setCurrentIndex(1)
         self.form.addRow(self.tr("Target size"), self.size)
         self.form.addRow(self.tr("Sound quality"), self.audio)
+        self.preset = self._preset_box()
+        self.height = QComboBox()
+        self.height.addItem(self.tr("Automatic - chosen from the bitrate"), None)
+        self.height.addItem(self.tr("Keep the original size"), 0)
+        for h in (1080, 720, 480, 360, 240):
+            self.height.addItem(f"{h}p", h)
+        self.height.currentIndexChanged.connect(self.changed)
+        self.expert_form.addRow(self.tr("Encoder speed"), self.preset)
+        self.expert_form.addRow(self.tr("Picture height"), self.height)
+        self._finish()
         self.size.valueChanged.connect(self.changed)
         self.audio.currentIndexChanged.connect(self.changed)
 
@@ -151,7 +217,10 @@ class ShrinkPanel(TaskPanel):
         return self.tr("Make a video small enough to send, by choosing the file size you need.")
 
     def settings(self):
-        return shrink.Settings(self.size.value(), self.audio.currentData())
+        s = shrink.Settings(self.size.value(), self.audio.currentData())
+        if self.expert:
+            s.preset, s.height = self.preset.currentText(), self.height.currentData()
+        return s
 
 
 class ConvertPanel(TaskPanel):
@@ -171,6 +240,18 @@ class ConvertPanel(TaskPanel):
         self.quality.setCurrentIndex(1)
         self.form.addRow(self.tr("Convert to"), self.target)
         self.form.addRow(self.tr("If re-encoding is needed"), self.quality)
+        self.reencode = QCheckBox(self.tr("Re-encode even what could be copied"))
+        self.reencode.toggled.connect(self.changed)
+        self.crf = self._crf_box(0, 63)
+        self.crf.setRange(-1, 63)
+        self.crf.setSpecialValueText(self.tr("From the quality setting above"))
+        self.crf.setValue(-1)
+        self.preset, self.kbps = self._preset_box(), self._kbps_box(0, automatic=True)
+        self.expert_form.addRow("", self.reencode)
+        self.expert_form.addRow(self.tr("Quality (CRF)"), self.crf)
+        self.expert_form.addRow(self.tr("Encoder speed (H.264)"), self.preset)
+        self.expert_form.addRow(self.tr("Audio bitrate"), self.kbps)
+        self._finish()
         self.target.currentIndexChanged.connect(self.changed)
         self.quality.currentIndexChanged.connect(self.changed)
 
@@ -182,7 +263,12 @@ class ConvertPanel(TaskPanel):
                        "new type can hold them.")
 
     def settings(self):
-        return convert.Settings(self.target.currentData(), self.quality.currentData())
+        s = convert.Settings(self.target.currentData(), self.quality.currentData())
+        if self.expert:
+            s.reencode, s.preset = self.reencode.isChecked(), self.preset.currentText()
+            s.crf = self.crf.value() if self.crf.value() >= 0 else None
+            s.audio_kbps = self.kbps.value() or None
+        return s
 
 
 class AudioPanel(TaskPanel):
@@ -197,6 +283,9 @@ class AudioPanel(TaskPanel):
         self.format.addItem(self.tr("Opus - smallest"), "opus")
         self.format.addItem(self.tr("WAV - uncompressed, large"), "wav")
         self.form.addRow(self.tr("Save as"), self.format)
+        self.kbps = self._kbps_box(0, automatic=True)
+        self.expert_form.addRow(self.tr("Bitrate (MP3, M4A, Opus)"), self.kbps)
+        self._finish()
         self.format.currentIndexChanged.connect(self.changed)
 
     def title(self) -> str:
@@ -206,7 +295,10 @@ class AudioPanel(TaskPanel):
         return self.tr("Save just the sound from a video as an audio file.")
 
     def settings(self):
-        return audio.Settings(self.format.currentData())
+        s = audio.Settings(self.format.currentData())
+        if self.expert:
+            s.kbps = self.kbps.value() or None
+        return s
 
 
 class JoinPanel(TaskPanel):
@@ -230,6 +322,13 @@ class JoinPanel(TaskPanel):
         box.addLayout(buttons)
         self.form.addRow(QLabel(self.tr("Clips, in playing order")))
         self.form.addRow(box)
+        self.reencode = QCheckBox(self.tr("Re-encode even when the clips match"))
+        self.reencode.toggled.connect(self.changed)
+        self.crf, self.preset = self._crf_box(20), self._preset_box()
+        self.expert_form.addRow("", self.reencode)
+        self.expert_form.addRow(self.tr("Quality (CRF), when re-encoding"), self.crf)
+        self.expert_form.addRow(self.tr("Encoder speed, when re-encoding"), self.preset)
+        self._finish()
         add.clicked.connect(self._add)
         remove.clicked.connect(self._remove)
         up.clicked.connect(lambda: self._move(-1))
@@ -282,7 +381,11 @@ class JoinPanel(TaskPanel):
             self._refill(target)
 
     def settings(self):
-        return join.Settings(list(self.clips))
+        s = join.Settings(list(self.clips))
+        if self.expert:
+            s.reencode, s.crf, s.preset = (self.reencode.isChecked(), self.crf.value(),
+                                           self.preset.currentText())
+        return s
 
     def first_clip(self) -> MediaInfo | None:
         return self.clips[0] if self.clips else None
@@ -302,6 +405,10 @@ class RotatePanel(TaskPanel):
         self.bake = QCheckBox(self.tr("Bake in - re-encode so every player shows it turned"))
         self.form.addRow(self.tr("Rotation"), self.action)
         self.form.addRow("", self.bake)
+        self.crf, self.preset = self._crf_box(18), self._preset_box()
+        self.expert_form.addRow(self.tr("Quality (CRF), when baking in"), self.crf)
+        self.expert_form.addRow(self.tr("Encoder speed, when baking in"), self.preset)
+        self._finish()
         self.action.currentIndexChanged.connect(self.changed)
         self.bake.toggled.connect(self.changed)
 
@@ -312,7 +419,10 @@ class RotatePanel(TaskPanel):
         return self.tr("Turn a video that plays sideways or upside down.")
 
     def settings(self):
-        return rotate.Settings(self.action.currentData(), self.bake.isChecked())
+        s = rotate.Settings(self.action.currentData(), self.bake.isChecked())
+        if self.expert:
+            s.crf, s.preset = self.crf.value(), self.preset.currentText()
+        return s
 
 
 class GifPanel(TaskPanel):
@@ -335,6 +445,18 @@ class GifPanel(TaskPanel):
         self.form.addRow(self.tr("Length"), self.length)
         self.form.addRow(self.tr("Width"), self.width)
         self.form.addRow(self.tr("Frames per second"), self.fps)
+        self.loop = QCheckBox(self.tr("Repeat for ever"))
+        self.loop.setChecked(True)
+        self.loop.toggled.connect(self.changed)
+        self.dither = QComboBox()
+        self.dither.addItem(self.tr("Sierra - FFmpeg's default"), "sierra2_4a")
+        self.dither.addItem(self.tr("Floyd-Steinberg"), "floyd_steinberg")
+        self.dither.addItem(self.tr("Bayer - regular pattern, smaller file"), "bayer")
+        self.dither.addItem(self.tr("None - flat colours, smallest file"), "none")
+        self.dither.currentIndexChanged.connect(self.changed)
+        self.expert_form.addRow("", self.loop)
+        self.expert_form.addRow(self.tr("Dithering"), self.dither)
+        self._finish()
         for w in (self.start, self.length, self.width, self.fps):
             w.valueChanged.connect(self.changed)
 
@@ -353,8 +475,11 @@ class GifPanel(TaskPanel):
             self.start.blockSignals(False)
 
     def settings(self):
-        return gif.Settings(self.start.value(), self.length.value(), self.width.value(),
-                            self.fps.value())
+        s = gif.Settings(self.start.value(), self.length.value(), self.width.value(),
+                         self.fps.value())
+        if self.expert:
+            s.loop, s.dither = self.loop.isChecked(), self.dither.currentData()
+        return s
 
 
 class SubtitlesPanel(TaskPanel):
@@ -374,6 +499,15 @@ class SubtitlesPanel(TaskPanel):
         self.form.addRow(self.tr("Subtitle file"), row)
         self.form.addRow(self.tr("How"), self.track)
         self.form.addRow("", self.burn)
+        self.crf, self.preset = self._crf_box(20), self._preset_box()
+        self.language = QLineEdit()
+        self.language.setMaxLength(3)
+        self.language.setPlaceholderText(self.tr("for example hin, eng, spa"))
+        self.language.textChanged.connect(self.changed)
+        self.expert_form.addRow(self.tr("Language of the track"), self.language)
+        self.expert_form.addRow(self.tr("Quality (CRF), when burning in"), self.crf)
+        self.expert_form.addRow(self.tr("Encoder speed, when burning in"), self.preset)
+        self._finish()
         browse.clicked.connect(self._browse)
         self.path.textChanged.connect(self.changed)
 
@@ -392,7 +526,11 @@ class SubtitlesPanel(TaskPanel):
 
     def settings(self):
         text = self.path.text().strip()
-        return subtitles.Settings(Path(text) if text else None, self.burn.isChecked())
+        s = subtitles.Settings(Path(text) if text else None, self.burn.isChecked())
+        if self.expert:
+            s.crf, s.preset = self.crf.value(), self.preset.currentText()
+            s.language = self.language.text().strip().lower()
+        return s
 
 
 PANELS = [TrimPanel, ShrinkPanel, ConvertPanel, AudioPanel, JoinPanel, RotatePanel, GifPanel,

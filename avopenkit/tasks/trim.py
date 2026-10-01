@@ -7,7 +7,8 @@ from pathlib import Path
 
 from ..core.job import Job, Plan
 from ..core.probe import MediaInfo
-from .base import (check_output, check_range, clock, need_encoder, secs, suggest, translate)
+from .base import (check_encode, check_kbps, check_output, check_range, clock, need_encoder, secs,
+                   suggest, translate)
 
 ID = "trim"
 H264_CONTAINERS = {".mp4", ".m4v", ".mov", ".mkv"}
@@ -19,6 +20,10 @@ class Settings:
     end: float = 0.0
     exact: bool = False        # False: stream copy on keyframes. True: re-encode, frame-accurate
     output: Path | None = None
+    # Expert options, used only by an exact trim.
+    crf: int = 18
+    preset: str = "medium"
+    audio_kbps: int = 192
 
 
 def suggest_output(media: MediaInfo, s: Settings) -> Path:
@@ -43,10 +48,12 @@ def plan(s: Settings, media: MediaInfo, tools=None, workdir: Path | None = None)
 
     if s.exact and media.video:
         need_encoder(tools, "libx264")
+        check_encode(s.crf, s.preset)
+        check_kbps(s.audio_kbps)
         args = ["-ss", secs(s.start), "-to", secs(end), "-i", src,
                 "-map", "0:v:0", "-map", "0:a?",
-                "-c:v", "libx264", "-crf", "18", "-preset", "medium",
-                "-c:a", "aac", "-b:a", "192k", str(out)]
+                "-c:v", "libx264", "-crf", str(s.crf), "-preset", s.preset,
+                "-c:a", "aac", "-b:a", f"{s.audio_kbps}k", str(out)]
         notes = [translate("tasks", "Re-encodes the video so the cut is exact: {0} to {1} ({2}).")
                  .format(clock(s.start), clock(end), clock(end - s.start)),
                  translate("tasks", "Slower than a fast trim, with a very small loss of quality.")]

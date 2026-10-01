@@ -66,6 +66,9 @@ def exists_message(paths: list[Path]) -> str:
     return "".join(f"{p}: already exists and was not replaced.\n" for p in paths)
 
 
+REFUSED = "already exists. Exiting"   # FFmpeg's -n message; its exit status is still 0
+
+
 def remove_outputs(job: Job) -> None:
     """Delete a job's partial output. Only ever called for files this run was allowed to write."""
     for p in job.outputs:
@@ -107,9 +110,13 @@ def run_blocking(job: Job, tools: Tools, on_progress=None, overwrite: bool = Fal
                 on_progress(fraction(block, job.duration), block)
     rc = proc.wait()
     reader.join()
+    text = "".join(log)
+    if rc == 0 and REFUSED in text:
+        # An output this module did not know about (a hand-edited command) already existed.
+        return RunResult(False, rc, text)
     if rc != 0:
         remove_outputs(job)
-    return RunResult(rc == 0, rc, "".join(log))
+    return RunResult(rc == 0, rc, text)
 
 
 def run_plan_blocking(plan: Plan, tools: Tools, overwrite: bool = False) -> RunResult:
@@ -149,6 +156,7 @@ if QObject is not None:
             self._overwrite = False
             self._cancelled = False
             self._parser = ProgressParser()
+            self._tail = ""     # end of the current job's messages, to spot REFUSED
 
         @property
         def running(self) -> bool:
@@ -178,6 +186,7 @@ if QObject is not None:
                 self._finish(False)
                 return
             self._started = self._index + 1
+            self._tail = ""
             self._parser = ProgressParser()
             p = QProcess(self)
             if job.cwd:
@@ -198,7 +207,9 @@ if QObject is not None:
                 self.progress.emit(overall, block)
 
         def _on_stderr(self) -> None:
-            self.log.emit(bytes(self._proc.readAllStandardError()).decode("utf-8", "replace"))
+            text = bytes(self._proc.readAllStandardError()).decode("utf-8", "replace")
+            self._tail = (self._tail + text)[-4000:]
+            self.log.emit(text)
 
         def _on_error(self, error) -> None:
             if error == QProcess.ProcessError.FailedToStart and self._proc is not None:
@@ -206,8 +217,9 @@ if QObject is not None:
                 self._finish(False)
 
         def _on_finished(self, code: int, status) -> None:
+            self._on_stderr()
             ok = (status == QProcess.ExitStatus.NormalExit and code == 0
-                  and not self._cancelled)
+                  and not self._cancelled and REFUSED not in self._tail)
             if ok and self._index + 1 < len(self._jobs):
                 self._proc.deleteLater()
                 self._index += 1

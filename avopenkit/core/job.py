@@ -45,11 +45,77 @@ def command_line(job: Job, program: str = "ffmpeg") -> str:
     return subprocess.list2cmdline(argv) if sys.platform == "win32" else shlex.join(argv)
 
 
-def parse_command_line(text: str) -> list[str]:
-    """Inverse of command_line(), for a command edited by hand. Returns args without the program."""
+def split_command_line(text: str) -> list[str]:
+    """A typed command as an argument list, program name included. No shell is involved:
+    quotes group words and nothing else ($VAR, `cmd`, ;, | and > are plain text)."""
     argv = shlex.split(text, posix=sys.platform != "win32")
     if sys.platform == "win32":
         argv = [a[1:-1] if len(a) >= 2 and a[0] == a[-1] == '"' else a for a in argv]
     if not argv:
         raise ValueError("empty command")
-    return argv[1:]
+    return argv
+
+
+def parse_command_line(text: str) -> list[str]:
+    """Inverse of command_line(): the arguments without the program name."""
+    return split_command_line(text)[1:]
+
+
+class CommandError(Exception):
+    """A hand-edited command cannot be run. `code` says why; the window words the message."""
+
+    def __init__(self, code: str, detail: str = "") -> None:
+        super().__init__(code)
+        self.code, self.detail = code, detail
+
+
+def _same_file(a: Path, b: Path) -> bool:
+    try:
+        return a.resolve() == b.resolve()
+    except OSError:
+        return False
+
+
+def guess_output(args: list[str], cwd: Path | None) -> Path | None:
+    """FFmpeg's output is its last argument, unless that is an option, `-` or an input."""
+    last = args[-1]
+    if last.startswith("-") or (len(args) >= 2 and args[-2] == "-i"):
+        return None
+    path = Path(last)
+    return path if path.is_absolute() or cwd is None else cwd / path
+
+
+def edited_plan(text: str, original: Plan | None) -> Plan:
+    """Turn commands edited by hand (one per line) into a Plan that runs them as typed (F2).
+
+    Still enforced: the program is always FFmpeg, started without a shell; -y and -n are
+    removed so that replacing a file stays a question the window asks; and the result may not
+    be one of the command's own inputs (F3).
+    """
+    lines = [line for line in text.splitlines() if line.strip()]
+    if not lines:
+        raise CommandError("empty")
+    same_shape = original is not None and len(lines) == len(original.jobs)
+    jobs = []
+    for i, line in enumerate(lines):
+        try:
+            argv = split_command_line(line)
+        except ValueError as e:
+            raise CommandError("syntax", str(e)) from e
+        if Path(argv[0]).name.lower() not in ("ffmpeg", "ffmpeg.exe"):
+            raise CommandError("program", argv[0])
+        args = [a for a in argv[1:] if a not in ("-y", "-n")]
+        if not args:
+            raise CommandError("empty")
+        base = original.jobs[i] if same_shape else None
+        cwd = base.cwd if base else None
+        out = guess_output(args, cwd)
+        inputs = [Path(args[k + 1]) for k, a in enumerate(args[:-1]) if a == "-i"]
+        if out is not None and any(_same_file(out, p if p.is_absolute() or cwd is None else cwd / p)
+                                   for p in inputs):
+            raise CommandError("over_input", str(out))
+        jobs.append(Job(args, [out] if out is not None else [],
+                        base.duration if base else None, base.label if base else "",
+                        cwd, edited=True))
+    return Plan(jobs, [], dict(original.write_files) if original else {},
+                list(original.copy_files) if original else [])

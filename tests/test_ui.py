@@ -11,11 +11,6 @@ from avopenkit.ui.main_window import MainWindow, human_size
 from avopenkit.ui.panels import JoinPanel
 
 
-@pytest.fixture(scope="session")
-def app():
-    return QApplication.instance() or QApplication([])
-
-
 @pytest.fixture
 def window(app, tools):
     w = MainWindow(tools)

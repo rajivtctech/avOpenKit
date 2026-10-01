@@ -23,6 +23,24 @@ def translate(context: str, text: str) -> str:
     return QCoreApplication.translate(context, text)
 
 
+X264_PRESETS = ["ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow",
+                "slower", "veryslow"]
+
+
+def check_encode(crf: int | None, preset: str, crf_max: int = 51) -> None:
+    """Expert-mode values that FFmpeg would otherwise reject with an obscure message."""
+    if crf is not None and not 0 <= crf <= crf_max:
+        raise TaskError(translate("tasks", "Quality (CRF) must be between 0 and {0}.")
+                        .format(crf_max))
+    if preset not in X264_PRESETS:
+        raise TaskError(translate("tasks", "Unknown encoder speed."))
+
+
+def check_kbps(kbps: int | None) -> None:
+    if kbps is not None and not 8 <= kbps <= 512:
+        raise TaskError(translate("tasks", "Audio bitrate must be between 8 and 512 kbit/s."))
+
+
 def secs(value: float) -> str:
     """Seconds as FFmpeg takes them on the command line."""
     return f"{value:.3f}"

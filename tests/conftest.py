@@ -54,3 +54,26 @@ def srt(clips):
 @pytest.fixture
 def info(tools):
     return lambda path, keyframes=False: probe.probe(path, tools, keyframes=keyframes)
+
+
+@pytest.fixture(scope="session")
+def app(tmp_path_factory):
+    """One QApplication for the session, with QSettings kept out of the real user config."""
+    from PyQt6.QtCore import QCoreApplication, QSettings
+    from PyQt6.QtWidgets import QApplication
+    QCoreApplication.setOrganizationName("avOpenKit-tests")
+    QCoreApplication.setApplicationName("avOpenKit")
+    QSettings.setDefaultFormat(QSettings.Format.IniFormat)
+    QSettings.setPath(QSettings.Format.IniFormat, QSettings.Scope.UserScope,
+                      str(tmp_path_factory.mktemp("settings")))
+    return QApplication.instance() or QApplication([])
+
+
+@pytest.fixture(autouse=True)
+def fresh_settings(request):
+    """Every test starts in simple mode, whatever an earlier test saved."""
+    if "app" in request.fixturenames:
+        from PyQt6.QtCore import QSettings
+        request.getfixturevalue("app")
+        QSettings().clear()
+    yield

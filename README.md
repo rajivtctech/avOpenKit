@@ -23,6 +23,10 @@ packaged downloads yet, and Windows has not been tested beyond a preview-player 
 | Make a GIF | A section of video as a looping GIF with a proper colour palette. |
 | Subtitles | Burn into the picture, or add as a track that can be switched on and off. |
 
+**Expert mode** adds codec-level options to every task (quality, encoder speed, audio bitrate
+and others) and lets you edit the command by hand before it runs. In simple mode those options
+are hidden and sensible defaults are used.
+
 Trim and Make a GIF have a preview with a scrub bar, so the start and end can be picked by
 looking. Before running, each task says in plain words what will happen — for example, that a fast trim
 will really start at the keyframe before the point you chose.

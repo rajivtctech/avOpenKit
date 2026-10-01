@@ -14,7 +14,8 @@ from pathlib import Path
 
 from ..core.job import Job, Plan
 from ..core.probe import MediaInfo
-from .base import TaskError, check_output, need_encoder, need_video, suggest, translate
+from .base import (TaskError, check_encode, check_output, need_encoder, need_video, suggest,
+                   translate)
 
 ID = "rotate"
 METADATA_CONTAINERS = {".mp4", ".m4v", ".mov", ".mkv"}
@@ -28,6 +29,9 @@ class Settings:
     action: str = "right"      # left, right, 180, hflip, vflip
     bake: bool = False         # True: re-encode so every player shows it turned
     output: Path | None = None
+    # Expert options, used only when baking in.
+    crf: int = 18
+    preset: str = "medium"
 
 
 def suggest_output(media: MediaInfo, s: Settings) -> Path:
@@ -62,8 +66,10 @@ def plan(s: Settings, media: MediaInfo, tools=None, workdir: Path | None = None)
 
     if bake:
         need_encoder(tools, "libx264")
+        check_encode(s.crf, s.preset)
         args = ["-i", src, "-map", "0:v:0", "-map", "0:a?", "-vf", FILTER[s.action],
-                "-c:v", "libx264", "-crf", "18", "-preset", "medium", "-c:a", "copy", str(out)]
+                "-c:v", "libx264", "-crf", str(s.crf), "-preset", s.preset, "-c:a", "copy",
+                str(out)]
         notes.insert(0, translate("tasks", "Re-encodes the video with the picture turned, so "
                                            "every player shows it the same way."))
         return Plan([Job(args, [out], media.duration, label)], notes)

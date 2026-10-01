@@ -7,7 +7,7 @@ from pathlib import Path
 
 from ..core.job import Job, Plan
 from ..core.probe import MediaInfo
-from .base import TaskError, check_output, need_encoder, suggest, translate
+from .base import TaskError, check_encode, check_output, need_encoder, suggest, translate
 
 ID = "join"
 
@@ -16,6 +16,10 @@ ID = "join"
 class Settings:
     clips: list[MediaInfo] = field(default_factory=list)   # in playing order
     output: Path | None = None
+    # Expert options.
+    reencode: bool = False     # re-encode even when the clips match
+    crf: int = 20
+    preset: str = "medium"
 
 
 def suggest_output(media: MediaInfo, s: Settings) -> Path:
@@ -60,8 +64,9 @@ def plan(s: Settings, media: MediaInfo | None = None, tools=None,
     total = sum(c.duration for c in clips)
     label = translate("tasks", "Join")
     diff = mismatches(clips)
+    check_encode(s.crf, s.preset)
 
-    if not diff:
+    if not diff and not s.reencode:
         listing = (workdir or Path(".")) / "join-list.txt"
         args = ["-f", "concat", "-safe", "0", "-i", str(listing),
                 "-map", "0:v?", "-map", "0:a?", "-c", "copy", str(out)]
@@ -90,9 +95,13 @@ def plan(s: Settings, media: MediaInfo | None = None, tools=None,
                  + ("[v][a]" if with_audio else "[v]"))
     args += ["-filter_complex", ";".join(graph), "-map", "[v]"]
     args += ["-map", "[a]", "-c:a", "aac", "-b:a", "192k"] if with_audio else []
-    args += ["-c:v", "libx264", "-crf", "20", "-preset", "medium", "-pix_fmt", "yuv420p", str(out)]
-    notes = [translate("tasks", "The clips do not match, so they are re-encoded to the first "
-                                "clip's size and frame rate ({0}×{1}, {2} fps).").format(w, h, fps)]
+    args += ["-c:v", "libx264", "-crf", str(s.crf), "-preset", s.preset, "-pix_fmt", "yuv420p",
+             str(out)]
+    reason = (translate("tasks", "The clips do not match, so they are re-encoded to the first "
+                                 "clip's size and frame rate ({0}×{1}, {2} fps).") if diff else
+              translate("tasks", "The clips are re-encoded as asked, at the first clip's size "
+                                 "and frame rate ({0}×{1}, {2} fps)."))
+    notes = [reason.format(w, h, fps)]
     notes += diff
     if not with_audio:
         notes.append(translate("tasks", "At least one clip has no sound, so the result is silent."))
