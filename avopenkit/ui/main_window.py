@@ -22,6 +22,8 @@ from ..core.presets import PresetStore, clean_name
 from ..core.probe import MediaInfo, ProbeError, probe
 from ..core.queue import (CANCELLED, DONE, FAILED, RUNNING, WAITING, JobQueue, QueueItem)
 from ..tasks.base import TaskError, clock
+from ..core.explain import plumbing_explanation
+from .console import CommandConsole
 from .dialogs import AboutDialog, SettingsDialog
 from .panels import MEDIA_FILTER, PANELS, JoinPanel
 from .preview import PreviewWidget
@@ -135,11 +137,14 @@ class MainWindow(QMainWindow):
         self.notes.setMargin(6)
 
         mono = QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont)
-        self.console = QPlainTextEdit()
+        self.console = CommandConsole()
         self.console.setReadOnly(True)
+        self.console.setToolTip("")           # per-word explanations are shown on hover
         self.console.setFont(mono)
         self.console.setMaximumHeight(130)
-        self.console.setPlaceholderText(self.tr("The FFmpeg command will appear here."))
+        self.console.setPlaceholderText(self.tr("The FFmpeg command will appear here. Rest "
+                                                "the mouse on any part of it to see what "
+                                                "that part does."))
         self.console.textChanged.connect(self._console_changed)
         self.edited_label = QLabel(self.tr("Edited by hand. The form above is ignored until "
                                            "you press Reset."))
@@ -157,6 +162,7 @@ class MainWindow(QMainWindow):
         self.plumbing = QLabel(self.tr("avOpenKit also adds, to follow progress and never "
                                        "overwrite a file: {0}").format(" ".join(PLUMBING) + " -n"))
         self.plumbing.setWordWrap(True)
+        self.plumbing.setToolTip(plumbing_explanation())
         self.copy_button = QPushButton(self.tr("Copy command"))
         self.copy_button.clicked.connect(
             lambda: QGuiApplication.clipboard().setText(self.console.toPlainText()))

@@ -145,6 +145,8 @@ class TaskPanel(QWidget):
         box.setSuffix(" kbit/s")
         if automatic:
             box.setSpecialValueText(self.tr("Default"))
+        box.setToolTip(self.tr("Audio bitrate: higher is better quality and a larger file. "
+                               "128 kbit/s is fine for most listening; 192 for music."))
         box.setValue(default)
         box.valueChanged.connect(self.changed)
         return box
@@ -208,6 +210,15 @@ class TrimPanel(TaskPanel):
         self.form.addRow(self.tr("End"), self._time_row(self.end, self.tr("End here")))
         self.form.addRow(self.tr("Method"), self.fast)
         self.form.addRow("", self.exact)
+        self.start.setToolTip(self.tr("Where the part you want to keep begins."))
+        self.end.setToolTip(self.tr("Where the part you want to keep ends."))
+        self.fast.setToolTip(self.tr(
+            "Copies the audio and video as they are. Instant and lossless, but a video can "
+            "only be cut at a keyframe, so the result may begin a little before the start "
+            "you chose."))
+        self.exact.setToolTip(self.tr(
+            "Re-encodes the video so it can be cut at any frame. Slower, with a very small "
+            "loss of quality."))
         self.crf, self.preset, self.kbps = self._crf_box(18), self._preset_box(), self._kbps_box(192)
         self.expert_form.addRow(self.tr("Quality (CRF), exact trim"), self.crf)
         self.expert_form.addRow(self.tr("Encoder speed, exact trim"), self.preset)
@@ -259,6 +270,12 @@ class ShrinkPanel(TaskPanel):
         for kbps in (64, 96, 128, 192):
             self.audio.addItem(self.tr("{0} kbit/s").format(kbps), kbps)
         self.audio.setCurrentIndex(1)
+        self.size.setToolTip(self.tr(
+            "The largest size the result may be. The video quality is set to whatever fits; "
+            "a smaller size or a longer video means lower quality."))
+        self.audio.setToolTip(self.tr(
+            "How much of the size is spent on sound. 96 kbit/s suits speech and most video; "
+            "choose more for music."))
         self.form.addRow(self.tr("Target size"), self.size)
         self.form.addRow(self.tr("Sound quality"), self.audio)
         self.preset = self._preset_box()
@@ -268,6 +285,9 @@ class ShrinkPanel(TaskPanel):
         for h in (1080, 720, 480, 360, 240):
             self.height.addItem(f"{h}p", h)
         self.height.currentIndexChanged.connect(self.changed)
+        self.height.setToolTip(self.tr(
+            "Automatic makes the picture smaller when the size leaves too little for a clear "
+            "picture at the original size."))
         self.expert_form.addRow(self.tr("Encoder speed"), self.preset)
         self.expert_form.addRow(self.tr("Picture height"), self.height)
         self._finish()
@@ -306,9 +326,16 @@ class ConvertPanel(TaskPanel):
         self.quality.addItem(self.tr("Balanced"), "medium")
         self.quality.addItem(self.tr("Smaller file, lower quality"), "small")
         self.quality.setCurrentIndex(1)
+        self.target.setToolTip(self.tr("The kind of file to make."))
+        self.quality.setToolTip(self.tr(
+            "Used only when the audio or video cannot simply be copied into the new kind of "
+            "file and has to be re-encoded."))
         self.form.addRow(self.tr("Convert to"), self.target)
         self.form.addRow(self.tr("If re-encoding is needed"), self.quality)
         self.reencode = QCheckBox(self.tr("Re-encode even what could be copied"))
+        self.reencode.setToolTip(self.tr(
+            "Normally audio and video that already fit the new file type are copied untouched. "
+            "Tick this to re-encode them anyway, for example to make the file smaller."))
         self.reencode.toggled.connect(self.changed)
         self.crf = self._crf_box(0, 63)
         self.crf.setRange(-1, 63)
@@ -355,8 +382,13 @@ class AudioPanel(TaskPanel):
         self.format.addItem(self.tr("M4A (AAC)"), "m4a")
         self.format.addItem(self.tr("Opus - smallest"), "opus")
         self.format.addItem(self.tr("WAV - uncompressed, large"), "wav")
+        self.format.setToolTip(self.tr(
+            "Keeping the original audio loses nothing. The other choices convert it, which "
+            "is useful when a player needs a particular kind of file."))
         self.form.addRow(self.tr("Save as"), self.format)
         self.kbps = self._kbps_box(0, automatic=True)
+        self.kbps.setToolTip(self.tr("Higher is better quality and a larger file. Default "
+                                     "leaves the choice to avOpenKit. Not used for WAV."))
         self.expert_form.addRow(self.tr("Bitrate (MP3, M4A, Opus)"), self.kbps)
         self._finish()
         self.format.currentIndexChanged.connect(self.changed)
@@ -398,7 +430,11 @@ class JoinPanel(TaskPanel):
         box.addLayout(buttons)
         self.form.addRow(QLabel(self.tr("Clips, in playing order")))
         self.form.addRow(box)
+        self.list.setToolTip(self.tr("The clips are joined from top to bottom."))
         self.reencode = QCheckBox(self.tr("Re-encode even when the clips match"))
+        self.reencode.setToolTip(self.tr(
+            "Matching clips are normally joined without re-encoding. Tick this if the joined "
+            "file stutters or loses sound at the joins."))
         self.reencode.toggled.connect(self.changed)
         self.crf, self.preset = self._crf_box(20), self._preset_box()
         self.expert_form.addRow("", self.reencode)
@@ -483,6 +519,11 @@ class RotatePanel(TaskPanel):
         self.action.addItem(self.tr("Mirror left-right"), "hflip")
         self.action.addItem(self.tr("Mirror top-bottom"), "vflip")
         self.bake = QCheckBox(self.tr("Bake in - re-encode so every player shows it turned"))
+        self.action.setToolTip(self.tr("Which way to turn the picture as you see it now."))
+        self.bake.setToolTip(self.tr(
+            "Without this, only a note saying \"show this turned\" is stored in the file: "
+            "instant and lossless, but a few players ignore it. With it, the picture itself "
+            "is turned and re-encoded."))
         self.form.addRow(self.tr("Rotation"), self.action)
         self.form.addRow("", self.bake)
         self.crf, self.preset = self._crf_box(18), self._preset_box()
@@ -526,13 +567,25 @@ class GifPanel(TaskPanel):
         self.fps.setRange(1, 60)
         self.fps.setValue(12)
         self.form.addRow(self.tr("Start"), self._time_row(self.start, self.tr("Start here")))
+        self.start.setToolTip(self.tr("Where in the video the GIF begins."))
+        self.length.setToolTip(self.tr("How many seconds of video the GIF shows."))
+        self.width.setToolTip(self.tr(
+            "Width of the GIF in pixels; the height follows. Halving the width makes the "
+            "file roughly a quarter of the size."))
+        self.fps.setToolTip(self.tr(
+            "How many pictures per second. 10 to 15 looks smooth enough; fewer makes a "
+            "smaller file."))
         self.form.addRow(self.tr("Length"), self.length)
         self.form.addRow(self.tr("Width"), self.width)
         self.form.addRow(self.tr("Frames per second"), self.fps)
         self.loop = QCheckBox(self.tr("Repeat for ever"))
         self.loop.setChecked(True)
+        self.loop.setToolTip(self.tr("Untick to make a GIF that plays once and stops."))
         self.loop.toggled.connect(self.changed)
         self.dither = QComboBox()
+        self.dither.setToolTip(self.tr(
+            "A GIF has only 256 colours. Dithering mixes dots of those colours to imitate "
+            "the rest; it looks smoother but makes the file larger."))
         self.dither.addItem(self.tr("Sierra - FFmpeg's default"), "sierra2_4a")
         self.dither.addItem(self.tr("Floyd-Steinberg"), "floyd_steinberg")
         self.dither.addItem(self.tr("Bayer - regular pattern, smaller file"), "bayer")
@@ -585,6 +638,13 @@ class SubtitlesPanel(TaskPanel):
         self.track, self.burn = self._radio_pair(
             self.tr("Add as a track - can be switched on and off, no re-encoding"),
             self.tr("Burn in - always visible, re-encodes the video"))
+        self.path.setToolTip(self.tr("The file holding the subtitle text and timings."))
+        self.track.setToolTip(self.tr(
+            "The subtitles are stored beside the video and the viewer switches them on in "
+            "the player. Nothing is re-encoded. Some players and websites do not show them."))
+        self.burn.setToolTip(self.tr(
+            "The words become part of the picture, so they show everywhere, but they cannot "
+            "be switched off and the video is re-encoded."))
         self.form.addRow(self.tr("Subtitle file"), row)
         self.form.addRow(self.tr("How"), self.track)
         self.form.addRow("", self.burn)
@@ -592,6 +652,9 @@ class SubtitlesPanel(TaskPanel):
         self.language = QLineEdit()
         self.language.setMaxLength(3)
         self.language.setPlaceholderText(self.tr("for example hin, eng, spa"))
+        self.language.setToolTip(self.tr(
+            "A two- or three-letter language code stored with the track, so players can list "
+            "it by language. Used only when adding a track."))
         self.language.textChanged.connect(self.changed)
         self.expert_form.addRow(self.tr("Language of the track"), self.language)
         self.expert_form.addRow(self.tr("Quality (CRF), when burning in"), self.crf)

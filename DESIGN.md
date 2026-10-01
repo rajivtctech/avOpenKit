@@ -1,6 +1,6 @@
 # avOpenKit — Design
 
-Draft 8 · 2026-10-01 · implements SPECIFICATIONS.md Rev G · first code increment written, see §7
+Draft 9 · 2026-10-01 · implements SPECIFICATIONS.md Rev G · first code increment written, see §7
 
 Everything marked *tested* was run on this machine (Ubuntu 26.04, FFmpeg 8.0.1, Python 3.14.4,
 PyQt6 6.11.0 from pip in `.venv`) by the scripts in `trials/`. Anything not marked is a proposal.
@@ -152,6 +152,13 @@ Rules that keep the layers apart (spec N7):
   FFmpeg's output is taken to be the last argument. If a command has outputs the window does
   not know about and one exists, FFmpeg's own `-n` refuses it — the runner recognises that
   message and reports a failure, because FFmpeg's exit status is 0 in that case.
+- **Explanations (F12).** `core/explain.py` splits the command text into words by the same
+  quoting rules the command box uses, and returns an explanation for each word's character
+  range; an option and its value share one explanation. It works on the text as shown, so a
+  hand-edited command is explained too, and an option it does not know is said to be unknown
+  rather than guessed at. `ui/console.py` shows the explanation for the word under the mouse.
+  A test walks every task, in both modes and every two-way choice, and fails if any word of a
+  generated command lacks an explanation; another fails if any option in any form lacks one.
 - **Queue (F8).** Every run goes through `core/queue.py`. Run adds the current job and starts
   the queue; Add to queue adds it without starting. The form stays usable while a job runs.
   A failed job does not stop the queue; Cancel stops the running job and leaves the rest
@@ -200,7 +207,9 @@ re-encodes and anything that will differ from what was asked.
 ## 4. Languages (spec §5a)
 
 - All user-visible text goes through `tr()`; sentences are whole strings with placeholders.
-  `pylupdate6` currently extracts 309 strings.
+  `pylupdate6` currently extracts 432 strings. It finds a string only when the call is
+  written as `self.tr(...)` or `translate("context", ...)`; a module-level helper named `tr`
+  is silently skipped.
 - `avopenkit/languages.py` holds the eleven languages of the specification, each named in its
   own script, and loads `avopenkit_<code>.qm`. Switching language takes effect on restart.
 - The language list is built from the `.qm` files present. `tools/update_translations.sh`
@@ -238,7 +247,7 @@ re-encodes and anything that will differ from what was asked.
 
 ## 7. Code status — first increment (0.1.0)
 
-Written and tested (194 tests: unit, real FFmpeg runs checked with `ffprobe`, and the window
+Written and tested (215 tests: unit, real FFmpeg runs checked with `ffprobe`, and the window
 and preview driven without a display):
 
 - `core/`: FFmpeg detection (F15, F16 path search), probing with keyframe times, job and plan
@@ -261,9 +270,11 @@ and preview driven without a display):
   and takes effect at once. About (Help menu): version, licence, source link, the FFmpeg in
   use with its path, version, build configuration and the licence that configuration implies,
   and the Qt, PyQt6 and Python versions (spec §7 notices).
+- Hover explanations (F12): every part of the command, the arguments avOpenKit adds, and
+  every option in every form.
 - All interface text goes through Qt's translation calls; `pylupdate6` extracts 180 strings.
 
-Not yet written: hover explanations of command parts (F12), hardware encoding (F14),
+Not yet written: hardware encoding (F14),
 the translations themselves, Windows packaging with bundled FFmpeg, User Guide.
 
 Known limits: probing reads keyframe times on the window's thread, which will pause the
