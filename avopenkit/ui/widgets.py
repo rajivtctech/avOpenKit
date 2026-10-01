@@ -11,7 +11,7 @@ from PyQt6.QtGui import (QColor, QFont, QImage, QPainter, QPainterPath, QPen, QP
 from PyQt6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QLayout, QSlider, QStyle,
                              QStyledItemDelegate, QVBoxLayout)
 
-from ..core.ffmpeg import Tools
+from ..core.ffmpeg import Tools, apply_child_env
 from ..core.job import Plan
 from . import icons, theme
 
@@ -58,6 +58,7 @@ class ThumbLoader(QObject):
             return
         self._index, seconds = self._todo.pop(0)
         p = QProcess(self)
+        apply_child_env(p)
         p.finished.connect(self._done)
         self._proc = p
         p.start(self.tools.ffmpeg, [

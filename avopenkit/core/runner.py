@@ -9,7 +9,7 @@ import threading
 from dataclasses import dataclass
 from pathlib import Path
 
-from .ffmpeg import Tools
+from .ffmpeg import Tools, apply_child_env, child_env
 from .job import Job, Plan, full_args
 
 
@@ -98,6 +98,7 @@ def run_blocking(job: Job, tools: Tools, on_progress=None, overwrite: bool = Fal
         kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
     proc = subprocess.Popen(
         [tools.ffmpeg, *full_args(job, overwrite)], cwd=job.cwd, stdin=subprocess.DEVNULL,
+        env=child_env(),
         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8",
         errors="replace", **kwargs)
     log: list[str] = []
@@ -193,6 +194,7 @@ if QObject is not None:
             self._tail = ""
             self._parser = ProgressParser()
             p = QProcess(self)
+            apply_child_env(p)
             if job.cwd:
                 p.setWorkingDirectory(str(job.cwd))
             p.readyReadStandardOutput.connect(self._on_stdout)

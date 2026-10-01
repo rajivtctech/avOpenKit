@@ -146,6 +146,15 @@ class SettingsDialog(QDialog):
         if self.ffmpeg_path.isEnabled() and override != saved:
             try:
                 tools = ffmpeg.detect(override or None)
+            except ffmpeg.FFmpegUnusable as e:
+                if override and not Path(e.path).resolve().is_relative_to(
+                        (Path(override).parent if Path(override).is_file() else Path(override)).resolve()):
+                    self._fail(self.tr("ffmpeg and ffprobe were not both found in {0}.")
+                               .format(override))
+                else:
+                    self._fail(self.tr("The program in {0} did not answer as FFmpeg.")
+                               .format(override or e.path))
+                return
             except ffmpeg.FFmpegNotFound:
                 self._fail(self.tr("FFmpeg was not found."))
                 return

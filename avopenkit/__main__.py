@@ -49,9 +49,20 @@ def self_test(path: str | None) -> int:
           f"PyQt {PYQT_VERSION_STR}; packaged: {bool(getattr(sys, 'frozen', False))}")
     try:
         tools = ffmpeg.detect()
+    except ffmpeg.FFmpegUnusable as e:
+        print(f"FFmpeg: found at {e.path} but it could not be started")
+        print("self-test FAILED")
+        return 1
     except ffmpeg.FFmpegNotFound:
         print("FFmpeg: NOT FOUND")
+        print("self-test FAILED")
         return 1
+    # A message box would wait for ever with nobody to answer it; record it and carry on.
+    asked: list[str] = []
+    for kind in ("warning", "critical", "question", "information"):
+        setattr(QMessageBox, kind, staticmethod(
+            lambda *a, _k=kind, **k: (asked.append(f"{_k}: {a[2] if len(a) > 2 else ''}"),
+                                      QMessageBox.StandardButton.No)[1]))
     print(f"FFmpeg: {tools.version_text} at {tools.ffmpeg}; {len(tools.encoders)} encoders, "
           f"{len(tools.filters)} filters; supplied with avOpenKit: {ffmpeg.is_bundled(tools)}")
     window = MainWindow(tools)
@@ -92,6 +103,9 @@ def self_test(path: str | None) -> int:
         print(f"job: trim {status}, result {size} bytes")
         ok = ok and status == "done" and size > 0
     window.close()
+    for message in asked:
+        print("message box: " + " ".join(message.split())[:200])
+    ok = ok and not asked
     print("self-test " + ("passed" if ok else "FAILED"))
     return 0 if ok else 1
 
@@ -113,6 +127,12 @@ def main() -> int:
     override = settings.value("ffmpeg_path", "", type=str) or None
     try:
         tools = ffmpeg.detect(override)
+    except ffmpeg.FFmpegUnusable as e:
+        QMessageBox.critical(None, "avOpenKit", QCoreApplication.translate(
+            "main",
+            "FFmpeg was found at {0}, but it could not be started. Check that it runs in a "
+            "terminal, or choose another FFmpeg in Settings.").format(e.path))
+        return 1
     except ffmpeg.FFmpegNotFound:
         hint = ("sudo apt install ffmpeg" if sys.platform.startswith("linux")
                 else "https://ffmpeg.org/download.html")

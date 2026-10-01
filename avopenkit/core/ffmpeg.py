@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import subprocess
@@ -14,6 +15,41 @@ MIN_VERSION = (6, 0)  # -display_rotation, needed by the rotate task (spec N2)
 
 class FFmpegNotFound(Exception):
     pass
+
+
+class FFmpegUnusable(FFmpegNotFound):
+    """ffmpeg is there but did not answer when started."""
+
+    def __init__(self, path: str) -> None:
+        super().__init__(f"{path} could not be started")
+        self.path = path
+
+
+def child_env() -> dict[str, str]:
+    """The environment for programs avOpenKit starts.
+
+    A packaged Linux build runs with LD_LIBRARY_PATH pointing at its own bundled libraries.
+    A program started from it would inherit that and load those libraries instead of the
+    system's: the system's FFmpeg then fails to start on any distribution newer than the one
+    the package was built on. PyInstaller keeps the original value in LD_LIBRARY_PATH_ORIG;
+    it is put back here for everything avOpenKit starts."""
+    env = dict(os.environ)
+    if getattr(sys, "frozen", False) and sys.platform != "win32":
+        original = env.pop("LD_LIBRARY_PATH_ORIG", None)
+        if original is not None:
+            env["LD_LIBRARY_PATH"] = original
+        else:
+            env.pop("LD_LIBRARY_PATH", None)
+    return env
+
+
+def apply_child_env(process) -> None:
+    """Give a QProcess the same cleaned environment."""
+    from PyQt6.QtCore import QProcessEnvironment
+    env = QProcessEnvironment()
+    for key, value in child_env().items():
+        env.insert(key, value)
+    process.setProcessEnvironment(env)
 
 
 @dataclass(frozen=True)
@@ -42,6 +78,7 @@ def run_quiet(args: list[str], **kwargs) -> subprocess.CompletedProcess:
     if sys.platform == "win32":
         kwargs.setdefault("creationflags", subprocess.CREATE_NO_WINDOW)
     kwargs.setdefault("stdin", subprocess.DEVNULL)
+    kwargs.setdefault("env", child_env())
     return subprocess.run(args, capture_output=True, text=True, encoding="utf-8",
                           errors="replace", **kwargs)
 
@@ -127,8 +164,13 @@ def locate(override: str | None = None) -> tuple[str, str]:
 
 def detect(override: str | None = None) -> Tools:
     ffmpeg, ffprobe = locate(override)
-    banner = run_quiet([ffmpeg, "-version"]).stdout
+    try:
+        banner = run_quiet([ffmpeg, "-version"]).stdout
+    except OSError:
+        banner = ""
     text, version = parse_version(banner)
+    if not text:
+        raise FFmpegUnusable(ffmpeg)
     return Tools(
         ffmpeg=ffmpeg, ffprobe=ffprobe, version_text=text, version=version,
         configuration=parse_configuration(banner),

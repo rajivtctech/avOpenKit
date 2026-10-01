@@ -27,6 +27,7 @@ def test_command_reference_is_what_the_program_generates(guide):
     assert guide[start:end].strip() == make_guide_assets.command_reference().strip()
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="the guide is generated on Linux")
 def test_command_reference_does_not_depend_on_where_it_is_generated(guide, tmp_path, monkeypatch):
     """No path from the machine that built the guide may appear in it."""
     here = make_guide_assets.command_reference()

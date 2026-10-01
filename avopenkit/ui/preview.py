@@ -24,7 +24,7 @@ from PyQt6.QtMultimediaWidgets import QVideoWidget
 from PyQt6.QtWidgets import (QHBoxLayout, QLabel, QPushButton, QSizePolicy, QStackedWidget,
                              QVBoxLayout, QWidget)
 
-from ..core.ffmpeg import Tools
+from ..core.ffmpeg import Tools, apply_child_env
 from ..core.probe import MediaInfo
 from ..tasks.base import clock
 from . import icons
@@ -270,6 +270,7 @@ class PreviewWidget(QWidget):
             self._pending = seconds          # only the newest request matters while scrubbing
             return
         p = QProcess(self)
+        apply_child_env(p)
         p.finished.connect(self._still_done)
         p.errorOccurred.connect(self._still_failed)
         self._grab = p

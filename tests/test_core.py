@@ -126,3 +126,34 @@ def test_command_line_round_trip(args):
 def test_parse_command_line_rejects_empty():
     with pytest.raises(ValueError):
         parse_command_line("   ")
+
+
+def test_programs_started_from_a_packaged_build_get_the_system_libraries(monkeypatch):
+    """A packaged Linux build runs with LD_LIBRARY_PATH set to its own libraries; FFmpeg must
+    not inherit that, or the system's FFmpeg fails to start on a newer distribution."""
+    monkeypatch.setenv("LD_LIBRARY_PATH", "/tmp/_MEI123")
+    monkeypatch.delenv("LD_LIBRARY_PATH_ORIG", raising=False)
+    assert ffmpeg.child_env()["LD_LIBRARY_PATH"] == "/tmp/_MEI123"      # from source: untouched
+
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    if sys.platform == "win32":
+        assert ffmpeg.child_env()["LD_LIBRARY_PATH"] == "/tmp/_MEI123"  # not a Windows matter
+        return
+    assert "LD_LIBRARY_PATH" not in ffmpeg.child_env()                  # there was none before
+    monkeypatch.setenv("LD_LIBRARY_PATH_ORIG", "/opt/mylibs")
+    env = ffmpeg.child_env()
+    assert env["LD_LIBRARY_PATH"] == "/opt/mylibs" and "LD_LIBRARY_PATH_ORIG" not in env
+    assert env["PATH"]                                                  # the rest is kept
+
+
+def test_an_ffmpeg_that_will_not_start_is_reported_not_used(tmp_path):
+    if sys.platform == "win32":
+        pytest.skip("uses shell scripts")
+    for name in ("ffmpeg", "ffprobe"):
+        script = tmp_path / name
+        script.write_text("#!/bin/sh\nexit 127\n")
+        script.chmod(0o755)
+    with pytest.raises(ffmpeg.FFmpegUnusable) as e:
+        ffmpeg.detect(str(tmp_path))
+    assert e.value.path == str(tmp_path / "ffmpeg")
+    assert isinstance(e.value, ffmpeg.FFmpegNotFound)

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import re
 import shutil
+import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -18,7 +20,7 @@ from PyQt6.QtWidgets import (QCheckBox, QComboBox, QFileDialog, QFrame, QHBoxLay
 
 from .. import __version__
 from ..core import errors, hardware
-from ..core.ffmpeg import Tools
+from ..core.ffmpeg import Tools, child_env
 from ..core.job import PLUMBING, CommandError, Plan, command_line, edited_plan
 from ..core.presets import PresetStore, clean_name
 from ..core.probe import MediaInfo, ProbeError, probe
@@ -993,6 +995,14 @@ class MainWindow(QMainWindow):
         if self._result is None:
             return
         target = self._result.parent if folder else self._result
+        if getattr(sys, "frozen", False) and sys.platform.startswith("linux"):
+            # Qt would start the player with this program's bundled libraries in its
+            # environment (see child_env); start it ourselves with the system's.
+            try:
+                subprocess.Popen(["xdg-open", str(target)], env=child_env())
+                return
+            except OSError:
+                pass
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(target)))
 
     def closeEvent(self, event) -> None:
