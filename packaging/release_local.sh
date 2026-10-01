@@ -32,7 +32,8 @@ OUT=$(mktemp -d); trap 'rm -rf "$OUT"' EXIT
 SOURCE=$CACHE/ffmpeg-$FFMPEG_VERSION-source.tar.gz
 mkdir -p "$CACHE"
 [ -f "$SOURCE" ] || curl -sSL -o "$SOURCE" "https://github.com/FFmpeg/FFmpeg/archive/$FFMPEG_SOURCE_COMMIT.tar.gz"
-tar -tzf "$SOURCE" | head -1 | grep -q "^FFmpeg-$FFMPEG_SOURCE_COMMIT/" || { echo "$SOURCE is not the FFmpeg source expected" >&2; exit 1; }
+FIRST=$(tar -tzf "$SOURCE" 2>/dev/null | head -1 || true)   # head closes the pipe early
+[ "${FIRST%%/*}" = "FFmpeg-$FFMPEG_SOURCE_COMMIT" ] || { echo "$SOURCE is not the FFmpeg source expected" >&2; exit 1; }
 cp "$LINUX" "$WINDOWS" "$SOURCE" docs/avOpenKit-User-Guide.pdf docs/avOpenKit-User-Guide-A5.pdf \
    packaging/THIRD-PARTY-NOTICES.md "$OUT/"
 (cd "$OUT" && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt)
