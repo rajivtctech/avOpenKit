@@ -65,7 +65,7 @@ def test_every_button_and_label_the_guide_quotes_exists_in_the_program(guide):
 
 def test_every_figure_exists(guide):
     figures = re.findall(r"!\[[^\]]*\]\(([^)]+)\)", guide)
-    assert len(figures) == 6
+    assert len(figures) == 7
     for name in figures:
         assert (GUIDE.parent / name).is_file(), name
 

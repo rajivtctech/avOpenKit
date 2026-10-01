@@ -13,8 +13,10 @@ keeps its quality.
 avOpenKit is not a video editor: there is no timeline and no project file. It covers the small
 jobs in between a converter and an editor.
 
-**Status: early development (0.1.0).** The eight tasks work on Linux from source. There are no
-packaged downloads yet, and Windows has not been tested beyond a preview-player trial.
+**Status: early release (0.1.0).** Downloads for Linux and Windows are on the
+[releases page](https://github.com/rajivtctech/avOpenKit/releases). The Windows build is new: it
+is built and self-tested automatically and has been run in a Windows 11 virtual machine, but has
+had far less use than the Linux one. English only for now.
 
 ## Tasks
 
@@ -48,6 +50,17 @@ encoder really works on your computer before offering it, and it is off unless y
 **About** (Help menu) shows exactly which FFmpeg is in use, its build configuration and licence.
 The program is prepared for eleven languages; a language appears in the chooser once its
 translation has been completed and checked. At present only English is available.
+
+## Download
+
+| System | File | Notes |
+|---|---|---|
+| Linux, 64-bit, Ubuntu 22.04 or newer | `avOpenKit-linux-x86_64` | One file. Needs FFmpeg 6.0 or newer installed. `chmod +x` it, then run it. |
+| Windows 10 / 11, 64-bit | `avOpenKit-windows-x64.zip` | Extract the folder, run `avOpenKit.exe`. FFmpeg is included. |
+
+Both are built by [GitHub Actions](.github/workflows/build.yml) from this repository; a tag
+starting with `v` publishes a release. What is inside them, and under which licences, is listed
+in [THIRD-PARTY-NOTICES.md](packaging/THIRD-PARTY-NOTICES.md).
 
 ## Run from source (Linux)
 

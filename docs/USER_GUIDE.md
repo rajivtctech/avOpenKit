@@ -81,55 +81,85 @@ These rules are built into the program and are checked by its automatic tests.
 
 ## 1.4 What you need
 
-| | |
-|---|---|
-| Operating system | Linux. The program is developed and tested on Ubuntu 26.04. Windows is planned, but **there is no Windows version yet** (section 7.8). |
-| FFmpeg | Version 6.0 or newer, with its companion program `ffprobe`. On Ubuntu both come in the one package `ffmpeg`. |
-| Python | Version 3.10 or newer (already present on current Linux systems). The program has been run and tested with Python 3.14 only. |
-| Disk space | About 300 MB for the program's own files, plus room for the results you make. |
+| | Linux | Windows |
+|---|---|---|
+| System | 64-bit; Ubuntu 22.04 or newer, or another distribution of the same age or newer | Windows 10 or 11, 64-bit |
+| FFmpeg | Version 6.0 or newer must be installed, with its companion `ffprobe`. On Ubuntu both come in the one package `ffmpeg`. | Included in the download. Nothing to install. |
+| Disk space | About 90 MB | About 340 MB once unpacked |
+
+**Ubuntu 22.04 users:** the FFmpeg that Ubuntu 22.04 supplies is version 4.4, which is too old.
+Install a newer FFmpeg separately and point avOpenKit to it in Settings (section 5.4). Ubuntu
+24.04 and newer supply a suitable one.
 
 ## 1.5 Installing
 
-There is no ready-made download yet. For now the program is installed from its source code,
-which takes four commands. Open a terminal and type each line, pressing Enter after each one.
+The downloads are on the releases page:
+<https://github.com/rajivtctech/avOpenKit/releases>
 
-**Step 1 — install FFmpeg and the tools needed to fetch and set up the program:**
+### On Linux
 
-```
-sudo apt install ffmpeg git python3-venv
-```
+1. Install FFmpeg if it is not already there. Open a terminal and type:
 
-**Step 2 — fetch avOpenKit:**
+   ```
+   sudo apt install ffmpeg
+   ```
+
+2. Download the file `avOpenKit-linux-x86_64` from the releases page.
+3. Allow it to be run. In a terminal, in the folder you downloaded it to:
+
+   ```
+   chmod +x avOpenKit-linux-x86_64
+   ```
+
+   (Or, in your file manager: right-click the file, choose Properties, then Permissions, and
+   tick the box that allows it to be run as a program.)
+
+That one file is the whole program. Keep it wherever you like.
+
+### On Windows
+
+1. Download `avOpenKit-windows-x64.zip` from the releases page.
+2. Right-click the downloaded file and choose **Extract All…**. Extract it to a folder of your
+   choice — your Documents folder, for instance. Do not try to run the program from inside the
+   zip file; it has to be extracted first.
+3. In the extracted `avOpenKit` folder, double-click `avOpenKit.exe`.
+
+Keep the whole folder together: the program needs the `_internal` folder beside it, which also
+holds the FFmpeg it uses.
+
+> **Windows may show a warning** the first time: "Windows protected your PC". This appears
+> because the program does not carry a publisher's certificate. Choose **More info**, then
+> **Run anyway**.
+
+### From the source code
+
+Developers can run avOpenKit straight from its source. This needs Python 3.10 or newer and git:
 
 ```
 git clone https://github.com/rajivtctech/avOpenKit.git
 cd avOpenKit
-```
-
-**Step 3 — set it up.** This creates a private folder named `.venv` inside the avOpenKit folder
-and puts everything the program needs there. Nothing else on your computer is changed.
-
-```
 python3 -m venv .venv
 .venv/bin/pip install -e .
+.venv/bin/python -m avopenkit
 ```
 
 ## 1.6 Starting the program
 
-From the avOpenKit folder:
+**Linux:** double-click `avOpenKit-linux-x86_64` in your file manager, or in a terminal type
+`./avOpenKit-linux-x86_64`. To start it with a file already open, put the file's name after it:
 
 ```
-.venv/bin/python -m avopenkit
+./avOpenKit-linux-x86_64 ~/Videos/holiday.mp4
 ```
 
-To start it with a file already open, put the file's name at the end:
+**Windows:** double-click `avOpenKit.exe`. You can also drag a video file onto `avOpenKit.exe`
+to start the program with that file open.
 
-```
-.venv/bin/python -m avopenkit ~/Videos/holiday.mp4
-```
+**If FFmpeg is missing** (Linux), the program shows a message that says so and gives the command
+to install it, then closes. Install FFmpeg and start again.
 
-**If FFmpeg is missing**, the program shows a message that says so and gives the command to
-install it, then closes. Install FFmpeg (Step 1 above) and start again.
+**If FFmpeg is there but cannot be started**, the program says where it found it and closes.
+Check that typing `ffmpeg -version` in a terminal works.
 
 **If FFmpeg is older than version 6.0**, the program warns you and still opens. Most tasks will
 work; **"Fix rotation"** needs version 6.0.
@@ -137,6 +167,8 @@ work; **"Fix rotation"** needs version 6.0.
 ## 1.7 The window
 
 ![The avOpenKit window, with a video open and the Trim task chosen.](img/window.png)
+
+![The same program running on Windows 11.](img/windows11.png)
 
 | Area | Where | What it is for |
 |---|---|---|
@@ -810,12 +842,16 @@ of sharing it can be agreed.
 
 | What | Where |
 |---|---|
-| Your choices: expert mode, language, FFmpeg folder, hardware encoding, and all presets | `~/.config/T&C Technology/avOpenKit.conf` |
+| Your choices: expert mode, appearance, language, FFmpeg folder, hardware encoding, and all presets | Linux: the file `~/.config/T&C Technology/avOpenKit.conf`. Windows: the registry, under `HKEY_CURRENT_USER\Software\T&C Technology\avOpenKit`. |
 | Temporary files while jobs run | A folder named `avopenkit-…` in the system's temporary folder. It is removed when the program closes. |
 | Results | Wherever the **"Result:"** box says; by default, beside the original. |
 
-**To return the program to its first-run state**, close it and delete the settings file. Your
-videos and results are not affected, but your own presets are lost.
+**To return the program to its first-run state**, close it and delete the settings file (Linux)
+or that registry key (Windows). Your videos and results are not affected, but your own presets
+are lost.
+
+**To remove the program**, delete the file (Linux) or the extracted folder (Windows). Nothing
+else is installed.
 
 # Part 7 — Expert reference
 
@@ -1191,8 +1227,11 @@ avOpenKit is free software under the GNU General Public License, version 3. Its 
 at <https://github.com/rajivtctech/avOpenKit>.
 
 It is built with PyQt6 (GPL v3) and Qt (LGPL v3), and it runs the separate `ffmpeg` and
-`ffprobe` programs, which on Linux are the ones installed on your computer and are not supplied
-by avOpenKit.
+`ffprobe` programs. On Linux these are the ones installed on your computer and are not supplied
+by avOpenKit. The Windows download includes them: FFmpeg 9.0.2, a build from www.gyan.dev under
+the GPL v3. Its licence and build details are in the `_internal\ffmpeg` folder, and its source
+code is published beside each avOpenKit release. The file `THIRD-PARTY-NOTICES.md`, in the
+Windows download and on the releases page, lists everything supplied and under which licence.
 
 avOpenKit uses FFmpeg but is not affiliated with or endorsed by the FFmpeg project. FFmpeg is a
 trademark of Fabrice Bellard.
@@ -1201,13 +1240,12 @@ trademark of Fabrice Bellard.
 
 | | |
 |---|---|
-| No ready-made download | The program is installed from source (section 1.5). |
-| No Windows version | Windows is planned, with FFmpeg supplied alongside the program. Nothing has been packaged, and the program as a whole has not been run on Windows; only a trial of the preview player was. |
+| Windows | The Windows download is built and checked automatically, and has been run in one Windows 11 virtual machine: the program started, showed a video with its filmstrip, and trimmed a file with the FFmpeg supplied. The other seven tasks, the queue, presets and Settings have been checked on Windows only by the program's automatic tests, not by hand. |
 | English only | No translation has been made yet (section 5.4). |
 | The queue is not saved | Closing the program discards waiting jobs. |
 | No batch folders | Running one task over a whole folder of files is not offered. |
 | Opening very long files | Pauses the window while keyframes are read (section 6.3). |
-| The preview | Has been run by the program's tests without a screen attached. It has not been tried on Windows, or with 4K or HEVC video. |
+| The preview | On Linux it has been run by the program's tests without a screen attached. On Windows it has been seen showing a video in a virtual machine. Playing with sound has not been tried by hand on either, nor has 4K or HEVC video. |
 | Rare lock-up after Play | Section 6.3. |
 | Hardware encoding | Tested on VAAPI only (section 7.5). |
 | Size presets | The supplied presets are sizes only. Presets named after particular services are not included, because their limits change and have to be taken from each service's published figure. |

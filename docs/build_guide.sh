@@ -54,7 +54,7 @@ def size(match):
     new = column * min(1.0, width / 1500.0)
     return f'svg:width="{new:.2f}cm" svg:height="{new * height / width:.2f}cm"'
 t, n = re.subn(r'svg:width="([\d.]+)pt" svg:height="([\d.]+)pt"', size, t)
-assert n == 6, n
+assert n == 7, n
 open(c, 'w').write(t)
 PY
     rm -f "$out.odt"
