@@ -21,12 +21,14 @@ from PyQt6.QtCore import QProcess, Qt, QTimer, QUrl, pyqtSignal
 from PyQt6.QtGui import QImage, QPixmap
 from PyQt6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PyQt6.QtMultimediaWidgets import QVideoWidget
-from PyQt6.QtWidgets import (QHBoxLayout, QLabel, QPushButton, QSizePolicy, QSlider,
-                             QStackedWidget, QVBoxLayout, QWidget)
+from PyQt6.QtWidgets import (QHBoxLayout, QLabel, QPushButton, QSizePolicy, QStackedWidget,
+                             QVBoxLayout, QWidget)
 
 from ..core.ffmpeg import Tools
 from ..core.probe import MediaInfo
 from ..tasks.base import clock
+from . import icons
+from .widgets import ThumbLoader, Timeline
 
 FRAME_TIMEOUT_MS = 4000      # no picture this long after loading a video: use stills
 DURATION_TOLERANCE = 1.0     # seconds Qt's idea of the length may differ from ffprobe's
@@ -61,28 +63,38 @@ class PreviewWidget(QWidget):
         self.screen.addWidget(self.video)
         self.screen.addWidget(self.still)
         self.screen.setMinimumHeight(200)
+        self.screen.setMaximumHeight(330)
 
         self.play_button = QPushButton(self.tr("Play"))
         self.mute_button = QPushButton(self.tr("Mute"))
         self.mute_button.setCheckable(True)
-        self.slider = QSlider(Qt.Orientation.Horizontal)
+        self.slider = Timeline()
+        self.slider.setToolTip(self.tr(
+            "Click or drag to move through the video. The lit part is what the task will use; "
+            "the green ticks underneath are keyframes, where a fast trim can begin."))
+        self.thumbs = ThumbLoader(tools, self)
+        self.thumbs.ready.connect(self.slider.set_thumb)
         self.slider.setRange(0, 0)
         self.slider.setSingleStep(100)       # milliseconds per arrow key
         self.slider.setPageStep(1000)
         self.time = QLabel("0:00.0 / 0:00.0")
         self.note = QLabel("")
+        self.note.setObjectName("hint")
         self.note.setWordWrap(True)
         self.note.setVisible(False)
         bar = QHBoxLayout()
         bar.addWidget(self.play_button)
-        bar.addWidget(self.slider, 1)
-        bar.addWidget(self.time)
         bar.addWidget(self.mute_button)
+        bar.addStretch()
+        bar.addWidget(self.time)
         box = QVBoxLayout(self)
         box.setContentsMargins(0, 0, 0, 0)
+        box.setSpacing(6)
         box.addWidget(self.screen, 1)
+        box.addWidget(self.slider)
         box.addLayout(bar)
         box.addWidget(self.note)
+        self.apply_icons()
 
         self._frame_timer = QTimer(self)
         self._frame_timer.setSingleShot(True)
@@ -91,6 +103,7 @@ class PreviewWidget(QWidget):
 
         self.play_button.clicked.connect(self.toggle_play)
         self.mute_button.toggled.connect(self.audio.setMuted)
+        self.mute_button.toggled.connect(lambda _on: self.apply_icons())
         self.slider.sliderMoved.connect(lambda ms: self.seek(ms / 1000))
         self.slider.actionTriggered.connect(self._slider_action)
         self.player.positionChanged.connect(self._on_player_position)
@@ -101,6 +114,15 @@ class PreviewWidget(QWidget):
         self.video.videoSink().videoFrameChanged.connect(self._on_frame)
 
     # ------------------------------------------------------------------ interface
+
+    def apply_icons(self) -> None:
+        playing = self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState
+        self.play_button.setIcon(icons.icon("pause" if playing else "play"))
+        self.mute_button.setIcon(icons.icon("mute" if self.mute_button.isChecked() else "volume"))
+
+    def set_selection(self, start: float | None, end: float | None = None) -> None:
+        """Light up the part of the file the task will use."""
+        self.slider.set_selection(start, end)
 
     def load(self, media: MediaInfo) -> None:
         self._stop_grab()
@@ -115,6 +137,12 @@ class PreviewWidget(QWidget):
         self.mute_button.setEnabled(media.audio is not None)
         self.slider.setRange(0, int(media.duration * 1000))
         self.slider.setValue(0)
+        self.slider.set_media(media.keyframes, media.video is not None)
+        self.slider.set_selection(None)
+        if media.video is not None and media.duration > 0:
+            self.thumbs.load(media.path, self.slider.thumb_times(media.duration))
+        else:
+            self.thumbs.cancel()
         self.screen.setVisible(media.video is not None)
         self.screen.setCurrentWidget(self.video)
         self._show_time()
@@ -125,6 +153,7 @@ class PreviewWidget(QWidget):
 
     def unload(self) -> None:
         self._frame_timer.stop()
+        self.thumbs.cancel()
         self._stop_grab()
         self.player.stop()
         self.player.setSource(QUrl())
@@ -198,6 +227,7 @@ class PreviewWidget(QWidget):
     def _on_state(self, state) -> None:
         playing = state == QMediaPlayer.PlaybackState.PlayingState
         self.play_button.setText(self.tr("Pause") if playing else self.tr("Play"))
+        self.apply_icons()
 
     def _slider_action(self, _action: int) -> None:
         # Clicks on the groove and arrow/page keys; dragging is handled by sliderMoved.

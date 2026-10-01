@@ -30,6 +30,7 @@ class SettingsDialog(QDialog):
         self.tools: Tools | None = None
         self.language_changed = False
         self.hardware_changed = False
+        self.theme_changed = False
         self._folder = i18n_folder
 
         self.language = QComboBox()
@@ -47,6 +48,19 @@ class SettingsDialog(QDialog):
         language_form = QFormLayout(language_box)
         language_form.addRow(self.tr("Language"), self.language)
         language_form.addRow(language_note)
+
+        self.appearance = QComboBox()
+        self.appearance.addItem(self.tr("Dark - neutral greys, easy on the eyes beside pictures"), "dark")
+        self.appearance.addItem(self.tr("Light"), "light")
+        self.appearance.setCurrentIndex(max(self.appearance.findData(
+            settings.value("theme", "dark", type=str)), 0))
+        appearance_note = QLabel(self.tr("A change of appearance takes effect the next time "
+                                         "avOpenKit starts."))
+        appearance_note.setWordWrap(True)
+        appearance_box = QGroupBox(self.tr("Appearance"))
+        appearance_form = QFormLayout(appearance_box)
+        appearance_form.addRow(self.tr("Colours"), self.appearance)
+        appearance_form.addRow(appearance_note)
 
         self.in_use = QLabel(self.tr("In use now: {0} (version {1})").format(
             tools.ffmpeg, tools.version_text or "?"))
@@ -100,13 +114,14 @@ class SettingsDialog(QDialog):
 
         self.error = QLabel("")
         self.error.setWordWrap(True)
-        self.error.setStyleSheet("color: #b00020;")
+        self.error.setStyleSheet("color: #ff5d73; font-weight: 600;")
         self.error.setVisible(False)
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok
                                    | QDialogButtonBox.StandardButton.Cancel)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         box = QVBoxLayout(self)
+        box.addWidget(appearance_box)
         box.addWidget(language_box)
         box.addWidget(ffmpeg_box)
         box.addWidget(hardware_box)
@@ -155,6 +170,9 @@ class SettingsDialog(QDialog):
             self.language_changed = (languages.effective(choice, self._folder)
                                      != languages.effective(before, self._folder))
             self.settings.setValue("language", choice)
+        if self.appearance.currentData() != self.settings.value("theme", "dark", type=str):
+            self.settings.setValue("theme", self.appearance.currentData())
+            self.theme_changed = True
         if self.hardware.isEnabled():
             chosen = self.hardware.currentData()
             if chosen != self.settings.value("hardware", "", type=str):

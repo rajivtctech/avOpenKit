@@ -8,11 +8,13 @@ import tempfile
 from pathlib import Path
 
 from PyQt6.QtCore import QSettings, Qt, QUrl
-from PyQt6.QtGui import QDesktopServices, QFontDatabase, QGuiApplication
+from PyQt6.QtGui import (QDesktopServices, QFontDatabase, QGuiApplication, QIcon, QPainter,
+                         QPixmap)
 from PyQt6.QtWidgets import (QCheckBox, QComboBox, QFileDialog, QFrame, QHBoxLayout,
                              QInputDialog, QLabel, QLineEdit, QListWidget, QListWidgetItem,
                              QMainWindow, QMessageBox, QPlainTextEdit, QProgressBar,
-                             QPushButton, QSplitter, QStackedWidget, QVBoxLayout, QWidget)
+                             QPushButton, QScrollArea, QSizePolicy, QStackedWidget, QVBoxLayout,
+                             QWidget)
 
 from .. import __version__
 from ..core import errors, hardware
@@ -23,10 +25,13 @@ from ..core.probe import MediaInfo, ProbeError, probe
 from ..core.queue import (CANCELLED, DONE, FAILED, RUNNING, WAITING, JobQueue, QueueItem)
 from ..tasks.base import TaskError, clock
 from ..core.explain import plumbing_explanation
+from . import icons, theme
 from .console import CommandConsole
 from .dialogs import AboutDialog, SettingsDialog
 from .panels import MEDIA_FILTER, PANELS, JoinPanel
 from .preview import PreviewWidget
+from .widgets import (BLURB_ROLE, ICON_ROLE, CommandHighlighter, FlowLayout, NotesBox,
+                      TaskDelegate, ThumbLoader, chip, plan_kind, rounded)
 
 
 def human_size(n: int) -> str:
@@ -46,6 +51,7 @@ class MainWindow(QMainWindow):
         self._form_plan: Plan | None = None    # what the form asks for, before any hand edit
         self._edited = False                   # the command was changed by hand (spec F2)
         self._setting_console = False
+        self._shown_command = ""
         self._result: Path | None = None
         self.settings = QSettings()
         self._output_custom = False
@@ -53,6 +59,7 @@ class MainWindow(QMainWindow):
         self._draft = 0                        # each queued job gets its own work folder
         self._shown: int | None = None         # queue item whose progress and log are shown
         self._applying_preset = False
+        self._waiting_for_file = True
         self.hw = None                         # working hardware encoder in use, or None
         self._hw_found: list | None = None     # encoders that passed the test, once looked for
         self.presets = PresetStore(self.settings)
@@ -60,7 +67,7 @@ class MainWindow(QMainWindow):
         self.runner = self.queue.runner
         self.setWindowTitle("avOpenKit")
         self.setAcceptDrops(True)
-        self.resize(1000, 900)
+        self.resize(1180, 940)
         self._build()
         self.queue.changed.connect(self._queue_changed)
         self.queue.progress.connect(self._on_progress)
@@ -76,7 +83,15 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------ layout
 
     def _build(self) -> None:
+        mono = QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont)
+        mono.setPointSizeF(9.5)
+
+        # ---- left: tasks and queue
         self.tasks = QListWidget()
+        self.tasks.setObjectName("tasks")
+        self.tasks.setItemDelegate(TaskDelegate(self.tasks))
+        self.tasks.setMouseTracking(True)
+        self.tasks.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.stack = QStackedWidget()
         self.preview = PreviewWidget(self.tools)
         self.preview.setVisible(False)
@@ -87,37 +102,128 @@ class MainWindow(QMainWindow):
             panel.changed.connect(self._form_changed)
             self.panels.append(panel)
             self.stack.addWidget(panel)
-            self.tasks.addItem(panel.title())
+            item = QListWidgetItem(panel.title(), self.tasks)
+            item.setData(BLURB_ROLE, panel.blurb())
+            item.setData(ICON_ROLE, panel.module.ID)
+            item.setToolTip(panel.blurb())
             if isinstance(panel, JoinPanel):
                 panel.request_probe.connect(self._add_join_clips)
+        self.tasks.setMinimumHeight(len(self.panels) * 58 + 8)
         self.tasks.currentRowChanged.connect(self._task_changed)
 
-        open_button = QPushButton(self.tr("Open a file…"))
-        open_button.clicked.connect(self._open_dialog)
-        self.file_label = QLabel(self.tr("No file open. Drop a file here, or use Open."))
-        self.file_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        self.queue_list = QListWidget()
+        self.queue_list.setObjectName("queue")
+        self.queue_list.setWordWrap(True)
+        self.queue_list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.queue_list.currentRowChanged.connect(self._queue_row_changed)
+        self.start_button = QPushButton(self.tr("Start"))
+        self.start_button.setIcon(icons.icon("play"))
+        self.start_button.setToolTip(self.tr("Run the waiting jobs one after another."))
+        self.start_button.clicked.connect(self.start_queue)
+        self.remove_button = QPushButton(self.tr("Remove"))
+        self.remove_button.setIcon(icons.icon("remove"))
+        self.remove_button.clicked.connect(self._remove_selected)
+        self.clear_button = QPushButton(self.tr("Clear finished"))
+        self.clear_button.setObjectName("ghost")
+        self.clear_button.setIcon(icons.icon("clear", theme.colour("muted")))
+        self.clear_button.clicked.connect(self.queue.clear_finished)
+        queue_buttons = QHBoxLayout()
+        queue_buttons.addWidget(self.start_button)
+        queue_buttons.addWidget(self.remove_button)
+        tasks_label = QLabel(self.tr("TASKS"))
+        self.queue_title = self.tr("QUEUE")
+        tasks_label.setObjectName("sectionLabel")
+        self.queue_label = QLabel(self.queue_title)
+        self.queue_label.setObjectName("sectionLabel")
+        side = QVBoxLayout()
+        side.setContentsMargins(6, 10, 6, 10)
+        side.setSpacing(4)
+        side.addWidget(tasks_label)
+        side.addWidget(self.tasks)
+        side.addSpacing(6)
+        side.addWidget(self.queue_label)
+        side.addWidget(self.queue_list, 1)
+        side.addLayout(queue_buttons)
+        side.addWidget(self.clear_button)
+        self.left = QFrame()
+        self.left.setObjectName("side")
+        self.left.setLayout(side)
+        self.left.setFixedWidth(264)
+
+        # ---- header
+        mark = QLabel()
+        mark.setPixmap(icons.logo(30))
+        name = QLabel("avOpenKit")
+        name.setObjectName("appName")
         self.expert_box = QCheckBox(self.tr("Expert mode"))
         self.expert_box.setToolTip(self.tr("Show codec-level options and allow the command "
                                            "to be edited before it runs."))
         self.expert_box.toggled.connect(self._mode_toggled)
-        file_row = QHBoxLayout()
-        file_row.addWidget(open_button)
-        file_row.addWidget(self.file_label, 1)
-        file_row.addWidget(self.expert_box)
+        settings_button = QPushButton()
+        settings_button.setObjectName("ghost")
+        settings_button.setIcon(icons.icon("settings", theme.colour("muted")))
+        settings_button.setToolTip(self.tr("Settings"))
+        settings_button.clicked.connect(self.open_settings)
+        head = QHBoxLayout()
+        head.setContentsMargins(14, 8, 12, 8)
+        head.addWidget(mark)
+        head.addWidget(name)
+        head.addStretch()
+        head.addWidget(self.expert_box)
+        head.addWidget(settings_button)
+        header = QFrame()
+        header.setObjectName("header")
+        header.setLayout(head)
 
-        self.inspector = QLabel("")
-        self.inspector.setWordWrap(True)
+        # ---- the file
+        self.thumb = QLabel()
+        self.thumb.setObjectName("thumb")
+        self.thumb.setFixedSize(132, 76)
+        self.thumb.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.file_label = QLabel(self.tr("No file open. Drop a file here, or use Open."))
+        self.file_label.setObjectName("fileName")
+        self.file_label.setWordWrap(True)
+        self.file_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        self.file_hint = QLabel(self.tr("Video or sound - MP4, MOV, MKV, WebM, MP3, WAV and "
+                                        "most others."))
+        self.file_hint.setObjectName("hint")
+        self.inspector = QLabel("")            # the file's facts as one line of text
+        self.inspector.setVisible(False)
+        self.chips = FlowLayout()
+        open_button = QPushButton(self.tr("Open a file…"))
+        open_button.setIcon(icons.icon("open"))
+        open_button.clicked.connect(self._open_dialog)
+        facts = QVBoxLayout()
+        facts.setSpacing(6)
+        facts.addWidget(self.file_label)
+        facts.addWidget(self.file_hint)
+        facts.addLayout(self.chips)
+        file_row = QHBoxLayout()
+        file_row.setContentsMargins(12, 10, 12, 10)
+        file_row.setSpacing(14)
+        file_row.addWidget(self.thumb)
+        file_row.addLayout(facts, 1)
+        file_row.addWidget(open_button, 0, Qt.AlignmentFlag.AlignVCenter)
+        self.file_card = QFrame()
+        self.file_card.setObjectName("dropCard")
+        self.file_card.setLayout(file_row)
+        self.poster = ThumbLoader(self.tools, self)
+        self.poster.ready.connect(self._show_poster)
+        self._show_poster()
+
+        # ---- the task
+        self.task_title = QLabel("")
+        self.task_title.setObjectName("taskTitle")
         self.blurb = QLabel("")
+        self.blurb.setObjectName("taskBlurb")
         self.blurb.setWordWrap(True)
-        font = self.blurb.font()
-        font.setBold(True)
-        self.blurb.setFont(font)
 
         self.preset_box = QComboBox()
         self.preset_box.activated.connect(self._preset_chosen)
         self.save_preset = QPushButton(self.tr("Save as preset…"))
         self.save_preset.clicked.connect(self._save_preset)
         self.delete_preset = QPushButton(self.tr("Delete preset"))
+        self.delete_preset.setObjectName("ghost")
         self.delete_preset.clicked.connect(self._delete_preset)
         preset_row = QHBoxLayout()
         preset_row.addWidget(QLabel(self.tr("Preset:")))
@@ -128,31 +234,43 @@ class MainWindow(QMainWindow):
         self.output = QLineEdit()
         self.output.textEdited.connect(self._output_edited)
         save_as = QPushButton(self.tr("Save as…"))
+        save_as.setIcon(icons.icon("save"))
         save_as.clicked.connect(self._save_dialog)
         out_row = QHBoxLayout()
         out_row.addWidget(QLabel(self.tr("Result:")))
         out_row.addWidget(self.output, 1)
         out_row.addWidget(save_as)
 
-        self.notes = QLabel("")
-        self.notes.setWordWrap(True)
-        self.notes.setFrameShape(QFrame.Shape.StyledPanel)
-        self.notes.setMargin(6)
+        form = QVBoxLayout()
+        form.setContentsMargins(14, 12, 14, 12)
+        form.setSpacing(10)
+        form.addLayout(preset_row)
+        form.addWidget(self.stack)
+        form.addLayout(out_row)
+        form_card = QFrame()
+        form_card.setObjectName("card")
+        form_card.setLayout(form)
 
-        mono = QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont)
+        # ---- what will happen, and the command
+        self.notes = NotesBox()
+
         self.console = CommandConsole()
         self.console.setReadOnly(True)
         self.console.setToolTip("")           # per-word explanations are shown on hover
         self.console.setFont(mono)
-        self.console.setMaximumHeight(130)
+        self.console.setMinimumHeight(86)
+        self.console.setMaximumHeight(150)
         self.console.setPlaceholderText(self.tr("The FFmpeg command will appear here. Rest "
                                                 "the mouse on any part of it to see what "
                                                 "that part does."))
+        self._highlighter = CommandHighlighter(self.console.document())
         self.console.textChanged.connect(self._console_changed)
         self.edited_label = QLabel(self.tr("Edited by hand. The form above is ignored until "
                                            "you press Reset."))
+        self.edited_label.setObjectName("hint")
         self.edited_label.setWordWrap(True)
         self.reset_button = QPushButton(self.tr("Reset"))
+        self.reset_button.setIcon(icons.icon("reset"))
         self.reset_button.setToolTip(self.tr("Discard the edit and show the command the form "
                                              "produces."))
         self.reset_button.clicked.connect(self._reset_edit)
@@ -164,20 +282,27 @@ class MainWindow(QMainWindow):
         self.edited_row.setVisible(False)
         self.plumbing = QLabel(self.tr("avOpenKit also adds, to follow progress and never "
                                        "overwrite a file: {0}").format(" ".join(PLUMBING) + " -n"))
+        self.plumbing.setObjectName("footnote")
         self.plumbing.setWordWrap(True)
         self.plumbing.setToolTip(plumbing_explanation())
+
         self.copy_button = QPushButton(self.tr("Copy command"))
+        self.copy_button.setIcon(icons.icon("copy"))
         self.copy_button.clicked.connect(
             lambda: QGuiApplication.clipboard().setText(self.console.toPlainText()))
         self.run_button = QPushButton(self.tr("Run"))
+        self.run_button.setObjectName("primary")
+        self.run_button.setIcon(icons.icon("play", theme.colour("accent_text"), theme.colour("faint")))
         self.run_button.setDefault(True)
         self.run_button.clicked.connect(self.run)
         self.cancel_button = QPushButton(self.tr("Cancel"))
+        self.cancel_button.setIcon(icons.icon("stop"))
         self.cancel_button.setEnabled(False)
         self.cancel_button.setToolTip(self.tr("Stop the job that is running. Jobs still "
                                               "waiting stay in the queue."))
         self.cancel_button.clicked.connect(self.queue.cancel)
         self.queue_button = QPushButton(self.tr("Add to queue"))
+        self.queue_button.setIcon(icons.icon("queue"))
         self.queue_button.setToolTip(self.tr("Keep this job for later and go on preparing "
                                              "others. Start the queue when you are ready."))
         self.queue_button.clicked.connect(self.add_to_queue)
@@ -188,36 +313,15 @@ class MainWindow(QMainWindow):
         run_row.addWidget(self.queue_button)
         run_row.addWidget(self.run_button)
 
-        self.queue_list = QListWidget()
-        self.queue_list.currentRowChanged.connect(self._queue_row_changed)
-        self.start_button = QPushButton(self.tr("Start"))
-        self.start_button.setToolTip(self.tr("Run the waiting jobs one after another."))
-        self.start_button.clicked.connect(self.start_queue)
-        self.remove_button = QPushButton(self.tr("Remove"))
-        self.remove_button.clicked.connect(self._remove_selected)
-        self.clear_button = QPushButton(self.tr("Clear finished"))
-        self.clear_button.clicked.connect(self.queue.clear_finished)
-        queue_buttons = QHBoxLayout()
-        queue_buttons.addWidget(self.start_button)
-        queue_buttons.addWidget(self.remove_button)
-        self.queue_label = QLabel(self.tr("Queue"))
-        left = QVBoxLayout()
-        left.setContentsMargins(0, 0, 0, 0)
-        left.addWidget(self.tasks, 2)
-        left.addWidget(self.queue_label)
-        left.addWidget(self.queue_list, 2)
-        left.addLayout(queue_buttons)
-        left.addWidget(self.clear_button)
-        self.left = QWidget()
-        self.left.setLayout(left)
-        self.left.setMaximumWidth(260)
-
         self.progress = QProgressBar()
         self.progress.setRange(0, 1000)
+        self.progress.setTextVisible(False)
         self.status = QLabel("")
         self.status.setWordWrap(True)
         self.open_folder = QPushButton(self.tr("Open folder"))
+        self.open_folder.setIcon(icons.icon("folder"))
         self.play = QPushButton(self.tr("Play result"))
+        self.play.setIcon(icons.icon("play"))
         for b in (self.open_folder, self.play):
             b.setVisible(False)
         self.open_folder.clicked.connect(lambda: self._open_result(folder=True))
@@ -228,39 +332,98 @@ class MainWindow(QMainWindow):
         status_row.addWidget(self.open_folder)
 
         self.log = QPlainTextEdit()
+        self.log.setObjectName("log")
         self.log.setReadOnly(True)
         self.log.setFont(mono)
+        self.log.setMinimumHeight(90)
         self.log.setPlaceholderText(self.tr("FFmpeg's own messages appear here."))
 
+        command = QVBoxLayout()
+        command.setContentsMargins(14, 12, 14, 12)
+        command.setSpacing(8)
+        command.addWidget(self.console)
+        command.addWidget(self.edited_row)
+        command.addWidget(self.plumbing)
+        command.addLayout(run_row)
+        command.addWidget(self.progress)
+        command.addLayout(status_row)
+        command_card = QFrame()
+        command_card.setObjectName("card")
+        command_card.setLayout(command)
+
         right = QVBoxLayout()
-        right.addLayout(file_row)
-        right.addWidget(self.inspector)
+        right.setContentsMargins(18, 14, 18, 14)
+        right.setSpacing(10)
+        right.addWidget(self.file_card)
+        right.addSpacing(4)
+        right.addWidget(self.task_title)
         right.addWidget(self.blurb)
         right.addWidget(self.preview, 2)
-        right.addLayout(preset_row)
-        right.addWidget(self.stack)
-        right.addLayout(out_row)
+        right.addWidget(form_card)
         right.addWidget(self.notes)
-        right.addWidget(self.console)
-        right.addWidget(self.edited_row)
-        right.addWidget(self.plumbing)
-        right.addLayout(run_row)
-        right.addWidget(self.progress)
-        right.addLayout(status_row)
+        right.addWidget(command_card)
         right.addWidget(self.log, 1)
         holder = QWidget()
         holder.setLayout(right)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setWidget(holder)
 
-        split = QSplitter()
-        split.addWidget(self.left)
-        split.addWidget(holder)
-        split.setStretchFactor(1, 1)
-        self.setCentralWidget(split)
+        body = QHBoxLayout()
+        body.setContentsMargins(0, 0, 0, 0)
+        body.setSpacing(0)
+        body.addWidget(self.left)
+        body.addWidget(scroll, 1)
+        whole = QVBoxLayout()
+        whole.setContentsMargins(0, 0, 0, 0)
+        whole.setSpacing(0)
+        whole.addWidget(header)
+        whole.addLayout(body, 1)
+        central = QWidget()
+        central.setLayout(whole)
+        self.setCentralWidget(central)
         tools_menu = self.menuBar().addMenu(self.tr("&Tools"))
         tools_menu.addAction(self.tr("&Settings…"), self.open_settings)
         help_menu = self.menuBar().addMenu(self.tr("&Help"))
         help_menu.addAction(self.tr("&About avOpenKit"), self.open_about)
         self._show_ffmpeg_in_status_bar()
+
+    def _show_poster(self, _index: int = 0, image=None) -> None:
+        """The small picture of the open file: a frame from it, or an icon when there is none."""
+        if image is not None and not image.isNull():
+            # Drawn at the screen's own resolution, so it stays sharp on high-density displays.
+            ratio = max(self.thumb.devicePixelRatioF(), 2.0)
+            size = self.thumb.size() * ratio
+            pm = QPixmap.fromImage(image).scaled(size, Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+                                                 Qt.TransformationMode.SmoothTransformation)
+            pm = pm.copy((pm.width() - size.width()) // 2, (pm.height() - size.height()) // 2,
+                         size.width(), size.height())
+            pm.setDevicePixelRatio(ratio)
+            self.thumb.setPixmap(rounded(pm, 6))
+            return
+        if self.media is None:
+            name = "drop"
+        else:
+            name = "film" if self.media.video is not None else "note"
+        self.thumb.setPixmap(icons.pixmap(name, theme.colour("faint"), 34))
+
+    def _show_file(self, media: MediaInfo) -> None:
+        """Fill the file card: name, facts as chips, and a picture from the file."""
+        self.file_label.setText(str(media.path))
+        self.file_hint.setVisible(False)
+        self.inspector.setText(self.describe(media))
+        self.chips.clear()
+        for text in self.facts(media):
+            self.chips.addWidget(chip(text))
+        self.file_card.setObjectName("card")
+        self.file_card.style().unpolish(self.file_card)
+        self.file_card.style().polish(self.file_card)
+        self._show_poster()
+        if media.video is not None and media.duration > 0:
+            self.poster.load(media.path, [min(media.duration * 0.1, 10.0)], 228)
+        else:
+            self.poster.cancel()
 
     def _show_ffmpeg_in_status_bar(self) -> None:
         self.statusBar().showMessage(
@@ -303,6 +466,8 @@ class MainWindow(QMainWindow):
                 self.tools.version_text, self.tools.ffmpeg))
         if dialog.language_changed:
             messages.append(self.tr("The language changes the next time avOpenKit starts."))
+        if dialog.theme_changed:
+            messages.append(self.tr("The new appearance is used the next time avOpenKit starts."))
         if dialog.hardware_changed or dialog.tools is not None:
             self._restore_hardware()
             if dialog.hardware_changed:
@@ -355,8 +520,7 @@ class MainWindow(QMainWindow):
         if media is None:
             return False
         self.media = media
-        self.file_label.setText(str(media.path))
-        self.inspector.setText(self.describe(media))
+        self._show_file(media)
         for panel in self.panels:
             panel.set_media(media)
         self._output_custom = False
@@ -372,6 +536,10 @@ class MainWindow(QMainWindow):
             self.panels[[type(p) for p in self.panels].index(JoinPanel)].add_clips(clips)
 
     def describe(self, m: MediaInfo) -> str:
+        return "  ·  ".join(self.facts(m))
+
+    def facts(self, m: MediaInfo) -> list[str]:
+        """The file's facts in plain words, one per chip."""
         parts = [self.tr("Length {0}").format(clock(m.duration)), human_size(m.size)]
         if m.video:
             v = m.video
@@ -390,7 +558,7 @@ class MainWindow(QMainWindow):
             parts.append(self.tr("No sound"))
         if m.has_subtitles:
             parts.append(self.tr("Has subtitle tracks"))
-        return "  ·  ".join(parts)
+        return parts
 
     def dragEnterEvent(self, event) -> None:
         if event.mimeData().hasUrls():
@@ -409,6 +577,12 @@ class MainWindow(QMainWindow):
 
     def _task_changed(self, row: int) -> None:
         self.stack.setCurrentIndex(row)
+        # Let the form be as tall as the task in view, not as tall as the tallest task.
+        for i, panel in enumerate(self.panels):
+            keep = QSizePolicy.Policy.Preferred if i == row else QSizePolicy.Policy.Ignored
+            panel.setSizePolicy(QSizePolicy.Policy.Preferred, keep)
+        self.stack.adjustSize()
+        self.task_title.setText(self.panel().title())
         self.blurb.setText(self.panel().blurb())
         self._output_custom = False
         self._edited = False
@@ -507,11 +681,16 @@ class MainWindow(QMainWindow):
 
     def _set_console(self, text: str) -> None:
         self._setting_console = True
+        self._shown_command = text
         self.console.setPlainText(text)
         self._setting_console = False
 
     def _console_changed(self) -> None:
         if self._setting_console or self.console.isReadOnly():
+            return
+        # Only a change of the words is an edit. Re-colouring the command also raises this
+        # signal, and must not be mistaken for the user typing.
+        if not self._edited and self.console.toPlainText() == self._shown_command:
             return
         self._edited = True
         self._use_edit()
@@ -528,13 +707,15 @@ class MainWindow(QMainWindow):
         except CommandError as e:
             self.plan = None
             self.run_button.setEnabled(False)
-            self.notes.setText(self._command_error(e))
+            self.queue_button.setEnabled(False)
+            self.notes.show_notes(self._command_error(e), "problem", self.tr("Cannot run"))
             return
         self.run_button.setEnabled(True)
-        self.notes.setText(self.tr(
+        self.queue_button.setEnabled(True)
+        self.notes.show_notes(self.tr(
             "This command was edited by hand and runs as typed, so avOpenKit can no longer "
             "say what it will do. It still never replaces a file without asking; -y and -n "
-            "in the command are ignored."))
+            "in the command are ignored."), "", self.tr("Edited by hand"))
 
     def _command_error(self, e: CommandError) -> str:
         return {
@@ -552,6 +733,8 @@ class MainWindow(QMainWindow):
         elif not wanted:
             self.preview.pause()
         self.preview.setVisible(wanted)
+        if wanted:
+            self.panel().show_selection()
 
     def _output_edited(self) -> None:
         self._output_custom = True
@@ -589,7 +772,8 @@ class MainWindow(QMainWindow):
         unless the user has typed their own."""
         panel = self.panel()
         media = self._effective_media()
-        if media is None and panel.needs_media():
+        self._waiting_for_file = media is None and panel.needs_media()
+        if self._waiting_for_file:
             return None, self.tr("Open a file to begin.")
         settings = panel.settings()
         if hasattr(settings, "hw"):
@@ -612,7 +796,15 @@ class MainWindow(QMainWindow):
         plan, problem = self._plan_from_form()
         self.plan = self._form_plan = plan
         ready = plan is not None
-        self.notes.setText("\n".join(plan.notes) if ready else problem)
+        if ready:
+            kind = plan_kind(plan)
+            badge = {"copy": self.tr("No quality loss"), "encode": self.tr("Re-encodes"),
+                     "mixed": self.tr("Partly re-encoded")}.get(kind, "")
+            self.notes.show_notes("\n".join(plan.notes), kind, badge)
+        elif self._waiting_for_file:
+            self.notes.show_notes(problem, "", "")
+        else:
+            self.notes.show_notes(problem, "problem", self.tr("Cannot run yet"))
         self._set_console("\n".join(command_line(j) for j in plan.jobs) if ready else "")
         self.run_button.setEnabled(ready)
         self.queue_button.setEnabled(ready)
@@ -681,6 +873,20 @@ class MainWindow(QMainWindow):
             self.queue.remove(self.queue.items[row].id)
             self.refresh()
 
+    def _status_dot(self, status: str) -> QIcon:
+        """A coloured dot for a queue row, so its state can be read without the words."""
+        tint = {WAITING: "muted", RUNNING: "accent", DONE: "good", FAILED: "bad",
+                CANCELLED: "faint"}[status]
+        pm = QPixmap(24, 24)
+        pm.fill(Qt.GlobalColor.transparent)
+        p = QPainter(pm)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(theme.colour(tint))
+        p.drawEllipse(6, 6, 12, 12)
+        p.end()
+        return QIcon(pm)
+
     def _status_word(self, status: str) -> str:
         return {WAITING: self.tr("waiting"), RUNNING: self.tr("running"), DONE: self.tr("done"),
                 FAILED: self.tr("failed"), CANCELLED: self.tr("cancelled")}[status]
@@ -691,13 +897,14 @@ class MainWindow(QMainWindow):
         self.queue_list.clear()
         for item in self.queue.items:
             text = f"{item.title} - {self._status_word(item.status)}"
-            QListWidgetItem(text, self.queue_list).setToolTip(text)
+            row = QListWidgetItem(self._status_dot(item.status), text, self.queue_list)
+            row.setToolTip(text)
         if 0 <= selected < len(self.queue.items):
             self.queue_list.setCurrentRow(selected)
         self.queue_list.blockSignals(False)
         waiting = len(self.queue.waiting())
-        self.queue_label.setText(self.tr("Queue ({0} waiting)").format(waiting) if waiting
-                                 else self.tr("Queue"))
+        self.queue_label.setText(self.tr("QUEUE ({0} waiting)").format(waiting) if waiting
+                                 else self.queue_title)
         self.start_button.setEnabled(waiting > 0 and not self.queue.running)
         self.cancel_button.setEnabled(self.queue.running)
         shown = self.queue.item(self._shown) if self._shown is not None else None
@@ -790,6 +997,7 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event) -> None:
         self.queue.shutdown()
+        self.poster.cancel()
         self.preview.unload()
         shutil.rmtree(self._workdir, ignore_errors=True)
         super().closeEvent(event)

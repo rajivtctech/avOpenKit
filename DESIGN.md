@@ -1,6 +1,6 @@
 # avOpenKit — Design
 
-Draft 10 · 2026-10-01 · implements SPECIFICATIONS.md Rev G · first code increment written, see §7
+Draft 12 · 2026-10-01 · implements SPECIFICATIONS.md Rev I · first code increment written, see §7
 
 Everything marked *tested* was run on this machine (Ubuntu 26.04, FFmpeg 8.0.1, Python 3.14.4,
 PyQt6 6.11.0 from pip in `.venv`) by the scripts in `trials/`. Anything not marked is a proposal.
@@ -219,6 +219,40 @@ The command console is always visible; it is the product's signature feature, as
 sslOpenCrypt. The "what will happen" line states, before running, whether the job copies or
 re-encodes and anything that will differ from what was asked.
 
+## 3a. Look (spec F19, N9)
+
+The audience is visual artists, so the look is designed, not left to the toolkit's defaults.
+
+- `ui/theme.py`: two palettes (dark, the default, and light) and one stylesheet built from
+  whichever is in use, on Qt's Fusion style so it looks the same on every desktop. Neutral
+  greys, one accent colour (coral) for the next action, green and amber for "kept" and
+  "re-encoded". A test checks every text/background pair in both themes for a contrast ratio
+  of 4.5 or better; it caught the light theme's first accent colour at 3.6.
+- `ui/icons.py`: 31 line icons drawn for this program, kept as SVG text and rendered in the
+  theme's colours at any size. No icon files and no third-party icon set.
+- `ui/widgets.py`:
+  - `Timeline` replaces the plain slider in the preview: twelve frames from the file as a
+    filmstrip, the chosen part lit and the rest dimmed, a green tick at every keyframe, a
+    playhead. It is still a `QSlider` underneath, so values, keyboard steps and the rest of the
+    preview code are unchanged; click or drag anywhere goes to that moment.
+  - `ThumbLoader` fetches frames one at a time with short FFmpeg runs that each seek straight
+    to their moment, without blocking the window; used for the filmstrip and the file's
+    thumbnail.
+  - `TaskDelegate` draws each task as a card with its icon, name and description.
+  - `NotesBox` is the "what will happen" box; `plan_kind()` reads the plan's arguments to
+    colour it green (everything copied), amber (something re-encoded) or red (cannot run).
+  - `CommandHighlighter` colours the command. It changes only formats, never text; because
+    re-colouring still raises the editor's change signal, the window now treats a change as a
+    hand edit only when the words differ from what it last set.
+  - `FlowLayout` wraps the file's fact labels, so they never force the window wider.
+- **A stylesheet trap worth recording:** a rule of the form `QFrame#card QWidget { background:
+  transparent }` outranks a button's own rule and silently removed the background from every
+  button and field inside a card. The general `QWidget` rule now sets no background and no such
+  descendant rules exist.
+- The appearance choice takes effect at the next start, like the language.
+- Not done: the look has been judged from off-screen renders only, not on a real screen; no
+  artist has seen it.
+
 ## 4. Languages (spec §5a)
 
 - All user-visible text goes through `tr()`; sentences are whole strings with placeholders.
@@ -262,7 +296,7 @@ re-encodes and anything that will differ from what was asked.
 
 ## 7. Code status — first increment (0.1.0)
 
-Written and tested (237 tests: unit, real FFmpeg runs checked with `ffprobe`, and the window
+Written and tested (261 tests: unit, real FFmpeg runs checked with `ffprobe`, and the window
 and preview driven without a display):
 
 - `core/`: FFmpeg detection (F15, F16 path search), probing with keyframe times, job and plan
@@ -288,9 +322,36 @@ and preview driven without a display):
 - Hover explanations (F12): every part of the command, the arguments avOpenKit adds, and
   every option in every form.
 - Hardware encoding (F14), offered in Settings only for encoders that pass a test encode.
+- The designed look (F19, N9): theme, icons, filmstrip timeline, task cards, coloured note box,
+  command colouring, file thumbnail and fact labels, dark and light themes.
 - All interface text goes through Qt's translation calls; `pylupdate6` extracts 180 strings.
 
-Not yet written: the translations themselves, Windows packaging with bundled FFmpeg, User Guide.
+- User Guide (spec §8): `docs/USER_GUIDE.md`, built by `docs/build_guide.sh` into A4 and A5,
+  each as a styled PDF and an editable ODT. Part 7.3, the reference of every command each task
+  generates, is produced by the task modules (`tools/make_guide_assets.py reference`), and the
+  screenshots are taken from the running program (`… screenshots`). `tests/test_guide.py` fails
+  if that reference is out of date, if a button or label the guide quotes does not exist in the
+  program, or if a message the guide explains is not one the program produces.
+
+- Single-file Linux program: `avopenkit.spec` and `packaging/build_linux.sh` (PyInstaller, own
+  build environment `.venv-build`) make `dist/avOpenKit`, 84 MB. `--self-test [file]` checks a
+  build from the outside: FFmpeg found, window built, and the preview player delivering a
+  picture, which is the part most likely to break when Qt's media plug-in is packaged. Built
+  on Ubuntu 26.04 (glibc 2.43), so it will not run on older distributions; a release build
+  needs an older build machine or CI runner.
+
+- Downloads for anyone: `.github/workflows/build.yml` builds on Ubuntu 22.04 and on Windows,
+  runs the tests, builds with `avopenkit.spec`, runs the packaged program's `--self-test` on a
+  generated clip, and on a `v*` tag publishes a release with both downloads, the User Guide,
+  the FFmpeg source archive, the notices and checksums. On Windows the self-test must also
+  report that the program used its own bundled FFmpeg. The Windows tests are reported but do
+  not stop the build; the self-test does.
+
+Not yet written: the translations themselves; the five artist tasks T9–T13 (spec §3).
+
+Found while writing the guide: re-encoding a video whose width or height is odd fails in
+libx264, and no task corrects it. The guide gives the expert-mode workaround
+(`-vf 'scale=trunc(iw/2)*2:trunc(ih/2)*2'`, tested); a built-in fix is not written.
 
 Known limits: probing reads keyframe times on the window's thread, which will pause the
 window on very long files; the Windows build has not been run; the preview has only been

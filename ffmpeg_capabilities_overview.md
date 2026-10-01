@@ -1,0 +1,44 @@
+# FFmpeg: Core Capabilities & Architecture
+
+FFmpeg is a cross-platform, open-source multimedia framework and command-line suite used to record, convert, edit, and stream audio and video.
+
+---
+
+### 1. Format Conversion & Transcoding
+* **Broad Codec & Container Support:** Decodes and encodes virtually every major modern and legacy format, including MP4, MKV, AVI, WebM, MOV, MP3, AAC, FLAC, and Opus.
+* **Modern Video Standards:** Encodes high-efficiency codecs such as H.264 (AVC), H.265 (HEVC), AV1, and VP9.
+* **Stream Copying (`-c copy`):** Changes container formats or extracts streams instantly without re-encoding, preserving exact quality with zero CPU overhead.
+
+### 2. Video Processing & Editing
+* **Trimming & Slicing:** Cuts clips to precise timestamps using start (`-ss`) and duration/end flags (`-t`, `-to`).
+* **Rescaling & Aspect Ratio Adjustment:** Scales video dimensions, changes display aspect ratios, and adds letterboxing/pillarboxing.
+* **Concatenation & Merging:** Stitches multiple clips together using demuxers or complex filter graphs.
+* **Frame Manipulation:** Adjusts frame rates (FPS), deinterlaces footage, extracts raw frames/thumbnails, and creates animated GIFs.
+* **Visual Filters:** Applies overlays, watermarks, text, color corrections, chroma-keying (green screen), blur, and stabilization.
+
+### 3. Audio Manipulation
+* **Audio Extraction & Stripping:** Isolates audio tracks from video or strips audio channels completely.
+* **Resampling & Channel Remapping:** Converts sample rates (e.g., 48 kHz to 44.1 kHz), alters bitrates, and downmixes surround sound (5.1/7.1) to stereo or mono.
+* **Volume & Equalization:** Normalizes audio levels (EBU R128 loudness normalization), applies compressors, and adjusts gain.
+
+### 4. Streaming & Live Broadcasting
+* **Network Protocol Support:** Streams over RTMP, RTSP, HLS, DASH, SRT, UDP, and HTTP.
+* **Live Ingestion & Transmuxing:** Packages live feeds for broadcast to platforms like YouTube, Twitch, or custom streaming servers.
+* **Adaptive Bitrate Generation:** Splits video feeds into multi-quality HLS/DASH playlists for adaptive streaming across varying connection speeds.
+
+### 5. Screen Recording & Device Capture
+* **Screen & Desktop Capture:** Records displays directly on Linux (`x11grab`), Windows (`gdigrab`), and macOS (`avfoundation`).
+* **Hardware Input Capture:** Captures live audio and video feeds directly from webcams, capture cards, and microphones.
+
+### 6. Subtitles & Metadata Management
+* **Subtitle Handling:** Embeds soft subtitles (SRT, ASS, VTT) as selectable tracks or burns "hardcoded" subtitles directly into video frames.
+* **Metadata Editing:** Reads, writes, or wipes global metadata (title, artist, year, chapters, copyright) and stream-level tags.
+
+### 7. Hardware Acceleration & Performance
+* **GPU Offloading:** Accelerates decoding, filtering, and encoding using dedicated GPU architectures (NVIDIA NVENC/NVDEC, Intel QuickSync/VAAPI, AMD AMF, and Apple VideoToolbox).
+* **Multi-threading:** Leverages multi-core CPU architecture for parallel processing.
+
+### 8. Diagnostic Tools & Ecosystem Components
+* **`ffprobe`:** Inspects media files to report detailed technical metadata (codecs, bitrates, dimensions, color spaces, container streams) in human-readable or structured formats (JSON, XML).
+* **`ffplay`:** A lightweight, SDL-based media player used for quick testing, verification, and playback.
+* **`libav*` C Libraries:** Underpins third-party software (VLC, Blender, OBS Studio, HandBrake) via shared libraries like `libavcodec`, `libavformat`, and `libavfilter`.

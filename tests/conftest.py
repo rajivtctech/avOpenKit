@@ -66,7 +66,10 @@ def app(tmp_path_factory):
     QSettings.setDefaultFormat(QSettings.Format.IniFormat)
     QSettings.setPath(QSettings.Format.IniFormat, QSettings.Scope.UserScope,
                       str(tmp_path_factory.mktemp("settings")))
-    return QApplication.instance() or QApplication([])
+    app = QApplication.instance() or QApplication([])
+    from avopenkit.ui import theme
+    theme.apply(app, "dark")
+    return app
 
 
 @pytest.fixture(autouse=True)

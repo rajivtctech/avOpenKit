@@ -1,6 +1,6 @@
 # avOpenKit — Specifications
 
-Rev G · **agreed by Rajiv Tyagi, 2026-10-01** (Rev F), amended with his decision of the same day · T&C Technology · **internal project** — costing
+Rev I · **agreed by Rajiv Tyagi, 2026-10-01** (Rev F), amended with his decisions of the same day · T&C Technology · **internal project** — costing
 sheets waived
 
 ## Revision history
@@ -14,6 +14,8 @@ sheets waived
 | E | 2026-10-01 | Decided: GPL v3, public GitHub repository (D2a). Indian languages chosen by the rule "one language per differing script" (D8a); list in §5a. Open: D7, D8b (Urdu), D9 — none blocks agreement. |
 | F | 2026-10-01 | **Specification agreed.** D8b decided: Urdu is not in version 1. D7 and D9 carried into design and release as planned work, not open questions. |
 | G | 2026-10-01 | D9 decided after the Linux preview trial (DESIGN.md §1.1): Qt's media player for the preview, with single frames from FFmpeg as the fallback. §7 corrected: the `ffmpeg` program is not shipped on Linux, but Qt's media libraries (which include FFmpeg libraries) are shipped in packaged builds on both platforms. New F18. |
+| H | 2026-10-01 | Audience stated by Rajiv: **the program serves visual artists, and its interface must be visually rich.** Visual artist added to §2; new F19 (visual feedback) and N9 (visual design). Candidate tasks for artists listed in §3 for decision. |
+| I | 2026-10-01 | Decided by Rajiv: the five artist tasks are accepted (T9–T13 in §3, not yet written); the built User Guide documents are kept in the repository; downloads are published for anyone. §7 names the FFmpeg supplied with the Windows download and how each release meets its obligations. |
 
 ## 1. Purpose
 
@@ -37,6 +39,7 @@ It is not an editor. There is no timeline, no project file and no effects librar
 | Regular | Trim, join, extract audio, fix rotation — quickly, without a web search each time. |
 | Expert | A fast way to build a correct command, then edit it by hand before running. |
 | Learner | To see which command a task produces and why, and copy it for scripts. |
+| **Visual artist** — illustrator, animator, photographer, designer, film-maker | **The main audience.** To prepare their own work for showing and sending. They judge a tool by how it looks, work in picture-first programs, and want to *see* the frames and the result rather than read numbers about them. |
 
 ## 3. Guided tasks — version 1
 
@@ -53,6 +56,16 @@ T1–T8, are in version 1.
 | T6 | **Fix rotation** | 90° left / 90° right / 180° / flip | Rotation metadata only (instant, no re-encode) by default; *bake in* option re-encodes with `transpose` for players that ignore the metadata. |
 | T7 | **Make a GIF** | Section, width, frame rate | Two-step `palettegen` / `paletteuse` for correct colours. Estimated file size shown before running. |
 | T8 | **Subtitles** | An `.srt` / `.ass` file; *burn in* or *add as track* | Burn in: `subtitles` filter (re-encode). Add as track: mux without re-encoding video. |
+
+**Accepted by Rajiv on 2026-10-01, for the visual-artist audience — not yet written:**
+
+| # | Task | What it does |
+|---|---|---|
+| T9 | **Crop to a shape** | Cut the picture to a shape for sharing: square, 4:5 or 9:16. |
+| T10 | **Image sequence** | Turn a numbered sequence of images into a video, and a video into images. |
+| T11 | **Contact sheet** | Lay frames from a video out as one picture. |
+| T12 | **Change speed** | Time-lapse and slow motion. |
+| T13 | **Export for editing** | Save as an editing format (ProRes) for handing work to an editor. |
 
 Candidates for a later version, not in version 1: crop, resize, change speed, loudness
 normalisation (`loudnorm`), mute/replace audio, extract frames as images, video from an image
@@ -80,6 +93,7 @@ sequence, screen recording, batch folders.
 | F16 | **Which FFmpeg is used.** Linux: the system's `ffmpeg` / `ffprobe` found on the `PATH`; if missing or older than N2, the application says so and gives the install command instead of starting tasks. Windows: the bundled copy. On both, Settings can point to a different FFmpeg executable, and About shows the path, version and build configuration in use. |
 | F17 | **Language selection.** The interface language is chosen in Settings from the list in §5a, each shown in its own script (हिन्दी, Español, Français …). On first run the application follows the system language when it is one of the supported ones, otherwise English. The choice is remembered. |
 | F18 | **Preview.** Tasks that select a section (T1, T7) show a preview with a scrub bar, played by Qt's media player with sound. If Qt cannot open the file, the preview falls back automatically to single frames extracted by FFmpeg (silent, stills only) and says so. The preview never decides the result: cut points are computed from `ffprobe` data, not from what the player displays. |
+| F19 | **Visual feedback.** The interface shows the picture, not only words about it: a thumbnail of the open file; a filmstrip of frames along the scrub bar, with the chosen part lit, the rest dimmed and keyframes marked; each task shown with its own drawn icon; the "what will happen" note coloured green when nothing is re-encoded, amber when something is and red when the job cannot run; the command in colour; queue states as coloured dots. Colour is never the only carrier of a meaning: each state also has words. |
 
 ## 5. Non-functional requirements
 
@@ -93,6 +107,7 @@ sequence, screen recording, batch folders.
 | N6 | **Settings** stored per user in the platform's standard configuration location; removable without affecting any media file. |
 | N7 | **Tested command builders.** The code that turns task settings into an argument list is separate from the GUI and has unit tests; each task also has an end-to-end test on small generated sample clips. |
 | N8 | **Languages:** see §5a. All interface text is translatable from the first line of code; no text is assembled from fragments in a way that fixes English word order. |
+| N9 | **Visual design.** A deliberate, consistent look in the manner of picture and video tools: neutral greys that do not tint the image being judged, one accent colour for the next action, drawn icons that stay sharp at any screen density. A dark theme by default and a light one, chosen in Settings. Text meets a contrast ratio of at least 4.5 to 1 against its background in both themes, checked by test. Visual richness must not cost clarity: the plain-language notes and the visible command remain. |
 
 ## 5a. Interface languages
 
@@ -181,8 +196,19 @@ command line.
 - **Patents** are outside what the licence grants: H.264, H.265 and AAC are patent-encumbered in
   some countries. Accepted for a free, open-source release; to be reviewed with legal advice
   before any paid edition.
-- **Which Windows build to bundle** (a named third-party GPL build, or one built in our own CI)
-  is a design-stage choice; whichever it is must allow items 1–2 to be met exactly.
+- **The Windows build supplied** is FFmpeg 9.0.2, "essentials" build from www.gyan.dev (GPL v3
+  by its README), fetched by `packaging/fetch_ffmpeg_windows.py`, which names the exact file and
+  checks its SHA-256. Its source is FFmpeg commit `946fcce07b6dcd0331c8cc609192aeff5e1924f8`;
+  the release workflow attaches the complete archive of that commit to every release, with
+  `THIRD-PARTY-NOTICES.md`. **Limit of what is hosted:** that FFmpeg build also contains other
+  libraries (x264, x265 and others, listed in its README). Their sources are published by their
+  own projects and are not copied into avOpenKit's releases. Whether that is sufficient is to
+  be confirmed with legal advice before any paid edition, together with the patent question.
+- **Form of the downloads.** Linux: one file, without FFmpeg, built on Ubuntu 22.04 so that it
+  runs on that and newer systems. Windows: a zipped folder with `avOpenKit.exe` and FFmpeg
+  inside — a folder rather than one file, because a single file would unpack about 300 MB to a
+  temporary folder at every start. Both are built, tested and published by
+  `.github/workflows/build.yml`; a tag starting with `v` publishes a release.
 - Packaging: PyInstaller builds for Linux and Windows from a GitHub Actions matrix, as
   DigiPotLab does.
 - Windows builds cannot be tested under Wine on this machine (Wine does not load Qt6); they are

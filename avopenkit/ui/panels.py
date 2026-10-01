@@ -13,6 +13,7 @@ from PyQt6.QtWidgets import (QAbstractItemView, QButtonGroup, QCheckBox, QComboB
 from ..core.probe import MediaInfo
 from ..tasks import audio, convert, gif, join, rotate, shrink, subtitles, trim
 from ..tasks.base import X264_PRESETS
+from . import icons
 
 MEDIA_FILTER = "*.mp4 *.m4v *.mov *.mkv *.webm *.avi *.wmv *.flv *.mpg *.mpeg *.ts *.3gp " \
                "*.mp3 *.m4a *.aac *.wav *.flac *.ogg *.opus *.wma *.gif"
@@ -48,6 +49,9 @@ class TaskPanel(QWidget):
 
     def attach_preview(self, preview) -> None:
         self.preview = preview
+
+    def show_selection(self, *_args) -> None:
+        """Mark on the timeline the part of the file this task will use, if it uses a part."""
 
     # -- presets (spec F10) --------------------------------------------------------------
 
@@ -151,9 +155,11 @@ class TaskPanel(QWidget):
         box.valueChanged.connect(self.changed)
         return box
 
-    def _time_row(self, box: QDoubleSpinBox, button_text: str) -> QHBoxLayout:
+    def _time_row(self, box: QDoubleSpinBox, button_text: str,
+                  icon_name: str = "mark_in") -> QHBoxLayout:
         """A seconds box with a button that sets it from the preview's current position."""
         button = QPushButton(button_text)
+        button.setIcon(icons.icon(icon_name))
         button.clicked.connect(lambda: self._take_position(box))
         box.valueChanged.connect(self._show_in_preview)
         row = QHBoxLayout()
@@ -207,7 +213,7 @@ class TrimPanel(TaskPanel):
             self.tr("Fast - no quality loss, starts on a keyframe"),
             self.tr("Exact - re-encodes, cuts exactly where asked"))
         self.form.addRow(self.tr("Start"), self._time_row(self.start, self.tr("Start here")))
-        self.form.addRow(self.tr("End"), self._time_row(self.end, self.tr("End here")))
+        self.form.addRow(self.tr("End"), self._time_row(self.end, self.tr("End here"), "mark_out"))
         self.form.addRow(self.tr("Method"), self.fast)
         self.form.addRow("", self.exact)
         self.start.setToolTip(self.tr("Where the part you want to keep begins."))
@@ -226,6 +232,12 @@ class TrimPanel(TaskPanel):
         self._finish()
         self.start.valueChanged.connect(self.changed)
         self.end.valueChanged.connect(self.changed)
+        self.start.valueChanged.connect(self.show_selection)
+        self.end.valueChanged.connect(self.show_selection)
+
+    def show_selection(self, *_args) -> None:
+        if self.preview is not None and self.preview.media is not None:
+            self.preview.set_selection(self.start.value(), self.end.value())
 
     def preset_fields(self) -> dict:
         return {"exact": (self.exact, False), "crf": (self.crf, True),
@@ -417,6 +429,8 @@ class JoinPanel(TaskPanel):
         super().__init__(parent)
         self.clips: list[MediaInfo] = []
         self.list = QListWidget()
+        self.list.setObjectName("clips")
+        self.list.setMinimumHeight(120)
         self.list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         add = QPushButton(self.tr("Add clips…"))
         remove = QPushButton(self.tr("Remove"))
@@ -596,6 +610,12 @@ class GifPanel(TaskPanel):
         self._finish()
         for w in (self.start, self.length, self.width, self.fps):
             w.valueChanged.connect(self.changed)
+        self.start.valueChanged.connect(self.show_selection)
+        self.length.valueChanged.connect(self.show_selection)
+
+    def show_selection(self, *_args) -> None:
+        if self.preview is not None and self.preview.media is not None:
+            self.preview.set_selection(self.start.value(), self.start.value() + self.length.value())
 
     def preset_fields(self) -> dict:
         return {"length": (self.length, False), "width": (self.width, False),

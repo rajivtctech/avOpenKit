@@ -4,6 +4,12 @@ Guided tasks for everyday video and audio jobs, built on FFmpeg. You pick a file
 plain questions, **see the exact FFmpeg command that will run**, and get a new file. Your
 original is never overwritten.
 
+It is made for visual artists: you see a thumbnail of your file, a filmstrip of its frames with
+the part you have chosen lit up, and a coloured note that says at a glance whether your picture
+keeps its quality.
+
+![The avOpenKit window](docs/img/window.png)
+
 avOpenKit is not a video editor: there is no timeline and no project file. It covers the small
 jobs in between a converter and an editor.
 
@@ -53,6 +59,18 @@ python3 -m venv .venv
 .venv/bin/python -m avopenkit            # or: .venv/bin/python -m avopenkit some-video.mp4
 ```
 
+## Build the single-file program (Linux)
+
+```
+packaging/build_linux.sh          # makes dist/avOpenKit and runs its self-test
+dist/avOpenKit                    # start it
+dist/avOpenKit --self-test FILE   # check a build: FFmpeg found, window built, preview plays
+```
+
+The binary carries Python and Qt with it, but not FFmpeg: it uses the `ffmpeg` and `ffprobe`
+installed on the computer. A binary runs only on systems whose C library is at least as new as
+the one it was built on, so one built on Ubuntu 26.04 will not start on older distributions.
+
 ## Tests
 
 ```
@@ -63,6 +81,10 @@ The tests generate their own clips, run every task through the real FFmpeg and c
 with `ffprobe`. They also drive the window without a display.
 
 ## Documents
+
+- **User Guide** — from first day to expert: [A4 PDF](docs/avOpenKit-User-Guide.pdf),
+  [A5 PDF](docs/avOpenKit-User-Guide-A5.pdf), [source](docs/USER_GUIDE.md); editable ODT copies
+  are beside them in `docs/`.
 
 - [SPECIFICATIONS.md](SPECIFICATIONS.md) — what the program must do, and the decisions behind it.
 - [DESIGN.md](DESIGN.md) — how it is built, with the trial results the design rests on.

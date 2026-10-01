@@ -5,18 +5,93 @@ from __future__ import annotations
 import sys
 
 from PyQt6.QtCore import QCoreApplication, QSettings
+from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import QApplication, QMessageBox
 
-from . import languages
+from . import __version__, languages
 from .core import ffmpeg
+from .ui import icons, theme
 from .ui.main_window import MainWindow
 
 
+def self_test(path: str | None) -> int:
+    """Check that this build can do its job, and say what it found. Used to test packaged
+    builds:  avOpenKit --self-test [media file]"""
+    import os
+    import time
+
+    import tempfile
+
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PyQt6.QtCore import PYQT_VERSION_STR, QT_VERSION_STR, QEventLoop
+
+    lines: list[str] = []
+
+    def print(text: str) -> None:      # noqa: A001 - also kept for the report file
+        lines.append(text)
+        if sys.stdout is not None:
+            sys.stdout.write(text + "\n")
+            sys.stdout.flush()
+        report = os.environ.get("AVOPENKIT_SELFTEST_REPORT")
+        if report:                     # a windowed Windows program has no console to print to
+            with open(report, "w", encoding="utf-8") as f:
+                f.write("\n".join(lines) + "\n")
+
+    app = QApplication(sys.argv[:1])
+    # Keep the test out of the user's real settings.
+    scratch = tempfile.TemporaryDirectory(prefix="avopenkit-selftest-")
+    app.setOrganizationName("avOpenKit-selftest")
+    QSettings.setDefaultFormat(QSettings.Format.IniFormat)
+    QSettings.setPath(QSettings.Format.IniFormat, QSettings.Scope.UserScope, scratch.name)
+    theme.apply(app, "dark")
+    print(f"avOpenKit {__version__}; Python {sys.version.split()[0]}; Qt {QT_VERSION_STR}; "
+          f"PyQt {PYQT_VERSION_STR}; packaged: {bool(getattr(sys, 'frozen', False))}")
+    try:
+        tools = ffmpeg.detect()
+    except ffmpeg.FFmpegNotFound:
+        print("FFmpeg: NOT FOUND")
+        return 1
+    print(f"FFmpeg: {tools.version_text} at {tools.ffmpeg}; {len(tools.encoders)} encoders, "
+          f"{len(tools.filters)} filters; supplied with avOpenKit: {ffmpeg.is_bundled(tools)}")
+    window = MainWindow(tools)
+    print(f"window: {window.tasks.count()} tasks")
+    ok = window.tasks.count() == 8
+    # The icons are drawn from SVG at run time; a packaged build that lost Qt's SVG support
+    # would show empty squares.
+    drawn = icons.pixmap("trim", "#ffffff", 24).toImage()
+    painted = sum(1 for x in range(drawn.width()) for y in range(drawn.height())
+                  if (drawn.pixel(x, y) >> 24) > 40)
+    print("icons: " + ("drawn" if painted > 40 else "NOT DRAWN"))
+    ok = ok and painted > 40
+    if path:
+        ok = window.open_file(path) and ok
+        print(f"opened: {window.inspector.text()}")
+        print(f"command: {window.console.toPlainText()[:90]}...")
+        end = time.monotonic() + 8
+        while time.monotonic() < end and not window.preview.got_frame and not window.preview.stills:
+            app.processEvents(QEventLoop.ProcessEventsFlag.AllEvents, 20)
+        print("preview: " + ("Qt player delivered a picture" if window.preview.got_frame
+                             else "fell back to still pictures" if window.preview.stills
+                             else "NO PICTURE"))
+        ok = ok and (window.preview.got_frame or window.preview.stills)
+    window.close()
+    print("self-test " + ("passed" if ok else "FAILED"))
+    return 0 if ok else 1
+
+
 def main() -> int:
+    if "--version" in sys.argv[1:]:
+        print(f"avOpenKit {__version__}")
+        return 0
+    if "--self-test" in sys.argv[1:]:
+        rest = [a for a in sys.argv[1:] if a != "--self-test"]
+        return self_test(rest[0] if rest else None)
     app = QApplication(sys.argv)
     app.setApplicationName("avOpenKit")
     app.setOrganizationName("T&C Technology")
     settings = QSettings()
+    theme.apply(app, settings.value("theme", "dark", type=str))
+    app.setWindowIcon(QIcon(icons.logo(64)))
     languages.install(app, settings.value("language", "", type=str))
     override = settings.value("ffmpeg_path", "", type=str) or None
     try:

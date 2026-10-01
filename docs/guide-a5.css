@@ -1,0 +1,6 @@
+@page { size: A5; margin: 12mm 11mm 13mm 11mm; }
+body { font-size: 8.6pt; line-height: 1.4; }
+table { font-size: 0.88em; }
+th { padding: 0.3em 0.35em; }
+td { padding: 0.28em 0.35em; }
+pre { font-size: 0.78em; }
