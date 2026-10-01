@@ -69,6 +69,36 @@ def parse_filters(output: str) -> frozenset[str]:
     return frozenset(re.findall(r"^ [A-Z.]{2,3} +(\S+) +\S+->\S+", output, re.M))
 
 
+def build_licence(configuration: str) -> str:
+    """The licence an FFmpeg build is under, from its configure flags (FFmpeg's LICENSE.md):
+    LGPL v2.1+ by default; --enable-gpl makes it GPL; --enable-version3 raises either to
+    version 3; --enable-nonfree makes the build unredistributable."""
+    flags = set(configuration.split())
+    if "--enable-nonfree" in flags:
+        return "nonfree"
+    gpl, v3 = "--enable-gpl" in flags, "--enable-version3" in flags
+    if gpl:
+        return "GPL v3 or later" if v3 else "GPL v2 or later"
+    return "LGPL v3 or later" if v3 else "LGPL v2.1 or later"
+
+
+def uses_override(tools: "Tools", override: str | None) -> bool:
+    """True when the FFmpeg in use is the one the user pointed to in Settings."""
+    if not override:
+        return False
+    p = Path(override)
+    folder = p.parent if p.is_file() else p
+    try:
+        return Path(tools.ffmpeg).resolve().parent == folder.resolve()
+    except OSError:
+        return False
+
+
+def is_bundled(tools: "Tools") -> bool:
+    b = bundled_dir()
+    return b is not None and Path(tools.ffmpeg).resolve().parent == b.resolve()
+
+
 def bundled_dir() -> Path | None:
     """Folder holding the FFmpeg shipped with a packaged Windows build, if there is one."""
     base = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[1]))

@@ -1,6 +1,6 @@
 # avOpenKit — Design
 
-Draft 7 · 2026-10-01 · implements SPECIFICATIONS.md Rev G · first code increment written, see §7
+Draft 8 · 2026-10-01 · implements SPECIFICATIONS.md Rev G · first code increment written, see §7
 
 Everything marked *tested* was run on this machine (Ubuntu 26.04, FFmpeg 8.0.1, Python 3.14.4,
 PyQt6 6.11.0 from pip in `.venv`) by the scripts in `trials/`. Anything not marked is a proposal.
@@ -200,10 +200,23 @@ re-encodes and anything that will differ from what was asked.
 ## 4. Languages (spec §5a)
 
 - All user-visible text goes through `tr()`; sentences are whole strings with placeholders.
-- `QTranslator` loads `avopenkit_<lang>.qm`; switching language takes effect on restart.
-- The language list is built from the `.qm` files present, so an unreviewed language is left
-  out simply by not shipping its file.
-- FFmpeg commands, logs and codec names are never passed through `tr()`.
+  `pylupdate6` currently extracts 309 strings.
+- `avopenkit/languages.py` holds the eleven languages of the specification, each named in its
+  own script, and loads `avopenkit_<code>.qm`. Switching language takes effect on restart.
+- The language list is built from the `.qm` files present. `tools/update_translations.sh`
+  creates or refreshes a language's `.ts` file and compiles a `.qm` **only** for codes listed
+  in `avopenkit/i18n/reviewed.txt`, so an unreviewed language cannot appear in the chooser.
+  Today no translation exists and the chooser offers English only.
+- The saved choice is either a language or "follow this computer's language". On first run the
+  system language is used when it is available, otherwise English (F17).
+- FFmpeg commands, logs and codec names are never passed through `tr()`; a test checks that
+  the command stays unchanged with a translation loaded.
+- **Finding:** Qt ships its own translations (standard dialog buttons such as OK and Cancel,
+  the file dialogs) for Spanish and French but for none of the Indian languages in the list.
+  For those, the texts of Qt's standard buttons and dialogs will have to be supplied in our
+  own translation files; not done yet.
+- On this machine `/usr/bin/lrelease` is a chooser that looks for Qt 5 and fails; the script
+  and tests call `/usr/lib/qt6/bin/lrelease` (package `qt6-l10n-tools`).
 
 ## 5. Testing
 
@@ -225,7 +238,7 @@ re-encodes and anything that will differ from what was asked.
 
 ## 7. Code status — first increment (0.1.0)
 
-Written and tested (170 tests: unit, real FFmpeg runs checked with `ffprobe`, and the window
+Written and tested (194 tests: unit, real FFmpeg runs checked with `ffprobe`, and the window
 and preview driven without a display):
 
 - `core/`: FFmpeg detection (F15, F16 path search), probing with keyframe times, job and plan
@@ -243,10 +256,15 @@ and preview driven without a display):
   editing the command before it runs (F2), with Reset to return to the form's command.
 - Job queue (F8) with its list, Start, Remove and Clear finished; presets (F10) with save,
   apply and delete per task.
+- Settings (Tools menu): language chooser (F17) and a different FFmpeg folder (F16), which is
+  checked before it is saved — both programs present, answers as FFmpeg, version 6.0 or newer —
+  and takes effect at once. About (Help menu): version, licence, source link, the FFmpeg in
+  use with its path, version, build configuration and the licence that configuration implies,
+  and the Qt, PyQt6 and Python versions (spec §7 notices).
 - All interface text goes through Qt's translation calls; `pylupdate6` extracts 180 strings.
 
 Not yet written: hover explanations of command parts (F12), hardware encoding (F14),
-Settings and About (F16, F17), translations, Windows packaging with bundled FFmpeg, User Guide.
+the translations themselves, Windows packaging with bundled FFmpeg, User Guide.
 
 Known limits: probing reads keyframe times on the window's thread, which will pause the
 window on very long files; the Windows build has not been run; the preview has only been

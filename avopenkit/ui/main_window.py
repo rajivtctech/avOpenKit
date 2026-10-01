@@ -22,6 +22,7 @@ from ..core.presets import PresetStore, clean_name
 from ..core.probe import MediaInfo, ProbeError, probe
 from ..core.queue import (CANCELLED, DONE, FAILED, RUNNING, WAITING, JobQueue, QueueItem)
 from ..tasks.base import TaskError, clock
+from .dialogs import AboutDialog, SettingsDialog
 from .panels import MEDIA_FILTER, PANELS, JoinPanel
 from .preview import PreviewWidget
 
@@ -246,8 +247,45 @@ class MainWindow(QMainWindow):
         split.addWidget(holder)
         split.setStretchFactor(1, 1)
         self.setCentralWidget(split)
+        tools_menu = self.menuBar().addMenu(self.tr("&Tools"))
+        tools_menu.addAction(self.tr("&Settings…"), self.open_settings)
+        help_menu = self.menuBar().addMenu(self.tr("&Help"))
+        help_menu.addAction(self.tr("&About avOpenKit"), self.open_about)
+        self._show_ffmpeg_in_status_bar()
+
+    def _show_ffmpeg_in_status_bar(self) -> None:
         self.statusBar().showMessage(
             f"avOpenKit {__version__} - FFmpeg {self.tools.version_text} ({self.tools.ffmpeg})")
+
+    # ------------------------------------------------------------------ settings and about
+
+    def open_settings(self) -> None:
+        dialog = SettingsDialog(self.settings, self.tools, self.queue.running, self)
+        if dialog.exec():
+            self.apply_settings(dialog)
+
+    def apply_settings(self, dialog: SettingsDialog) -> None:
+        """Act on an accepted Settings dialog."""
+        self._clear_result()
+        messages = []
+        if dialog.tools is not None:
+            self.set_tools(dialog.tools)
+            messages.append(self.tr("Now using FFmpeg {0} from {1}.").format(
+                self.tools.version_text, self.tools.ffmpeg))
+        if dialog.language_changed:
+            messages.append(self.tr("The language changes the next time avOpenKit starts."))
+        self.status.setText(" ".join(messages))
+
+    def set_tools(self, tools: Tools) -> None:
+        """Switch to a different FFmpeg (spec F16). Jobs already queued run with it too."""
+        self.tools = tools
+        self.queue.runner.set_tools(tools)
+        self.preview.tools = tools
+        self._show_ffmpeg_in_status_bar()
+        self.refresh()
+
+    def open_about(self) -> None:
+        AboutDialog(self.tools, self).exec()
 
     # ------------------------------------------------------------------ files
 

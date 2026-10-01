@@ -162,6 +162,10 @@ if QObject is not None:
         def running(self) -> bool:
             return self._proc is not None
 
+        def set_tools(self, tools: Tools) -> None:
+            """Use a different FFmpeg from the next job on (Settings, spec F16)."""
+            self._tools = tools
+
         def start(self, plan: Plan, overwrite: bool = False) -> None:
             if self.running:
                 raise RuntimeError("a plan is already running")

@@ -34,6 +34,11 @@ Trim and Make a GIF have a preview with a scrub bar, so the start and end can be
 looking. Before running, each task says in plain words what will happen — for example, that a fast trim
 will really start at the keyframe before the point you chose.
 
+**Settings** (Tools menu) chooses the language and, if you want, a different FFmpeg to use.
+**About** (Help menu) shows exactly which FFmpeg is in use, its build configuration and licence.
+The program is prepared for eleven languages; a language appears in the chooser once its
+translation has been completed and checked. At present only English is available.
+
 ## Run from source (Linux)
 
 Needs Python 3.10 or newer and FFmpeg 6.0 or newer (`sudo apt install ffmpeg`).
