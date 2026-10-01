@@ -22,13 +22,14 @@ class SettingsDialog(QDialog):
     (None when it did not change) and `language_changed` says whether a restart is needed."""
 
     def __init__(self, settings: QSettings, tools: Tools, busy: bool = False, parent=None,
-                 i18n_folder: Path = languages.FOLDER) -> None:
+                 i18n_folder: Path = languages.FOLDER, hardware=()) -> None:
         super().__init__(parent)
         self.setWindowTitle(self.tr("Settings"))
         self.settings = settings
         self._current = tools
         self.tools: Tools | None = None
         self.language_changed = False
+        self.hardware_changed = False
         self._folder = i18n_folder
 
         self.language = QComboBox()
@@ -77,6 +78,26 @@ class SettingsDialog(QDialog):
             ffmpeg_note.setText(self.tr("The FFmpeg in use cannot be changed while a job is "
                                         "running."))
 
+        # Only encoders that passed a test encode on this machine are passed in (spec F14).
+        self.hardware = QComboBox()
+        self.hardware.addItem(self.tr("Off - use the standard encoder"), "")
+        for hw in hardware:
+            self.hardware.addItem(hw.label, hw.id)
+        saved_hw = settings.value("hardware", "", type=str)
+        self.hardware.setCurrentIndex(max(self.hardware.findData(saved_hw), 0))
+        self.hardware.setEnabled(bool(hardware))
+        hardware_note = QLabel(
+            self.tr("Lets the graphics chip do the encoding when a task re-encodes video to "
+                    "H.264. It is faster, but usually gives a little lower quality at the same "
+                    "file size. Shrink to a size always uses the standard encoder, which hits "
+                    "the target size more accurately.") if hardware else
+            self.tr("No working hardware encoder was found on this computer."))
+        hardware_note.setWordWrap(True)
+        hardware_box = QGroupBox(self.tr("Hardware encoding"))
+        hardware_form = QFormLayout(hardware_box)
+        hardware_form.addRow(self.tr("Encoder"), self.hardware)
+        hardware_form.addRow(hardware_note)
+
         self.error = QLabel("")
         self.error.setWordWrap(True)
         self.error.setStyleSheet("color: #b00020;")
@@ -88,6 +109,7 @@ class SettingsDialog(QDialog):
         box = QVBoxLayout(self)
         box.addWidget(language_box)
         box.addWidget(ffmpeg_box)
+        box.addWidget(hardware_box)
         box.addWidget(self.error)
         box.addWidget(buttons)
         self.resize(620, self.sizeHint().height())
@@ -133,6 +155,11 @@ class SettingsDialog(QDialog):
             self.language_changed = (languages.effective(choice, self._folder)
                                      != languages.effective(before, self._folder))
             self.settings.setValue("language", choice)
+        if self.hardware.isEnabled():
+            chosen = self.hardware.currentData()
+            if chosen != self.settings.value("hardware", "", type=str):
+                self.settings.setValue("hardware", chosen)
+                self.hardware_changed = True
         super().accept()
 
 

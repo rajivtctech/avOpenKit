@@ -7,8 +7,8 @@ from pathlib import Path
 
 from ..core.job import Job, Plan
 from ..core.probe import MediaInfo
-from .base import (TaskError, check_encode, check_kbps, check_output, need_encoder, suggest,
-                   translate)
+from .base import (TaskError, check_encode, check_kbps, check_output, h264_codec, h264_encoder,
+                   hw_global, hw_note, need_encoder, suggest, translate, video_filter)
 
 ID = "convert"
 
@@ -38,6 +38,7 @@ class Settings:
     preset: str = "medium"
     audio_kbps: int | None = None
     reencode: bool = False     # re-encode even what could be copied
+    hw: object = None          # a working HwEncoder to use for H.264 instead of libx264
 
 
 def suggest_output(media: MediaInfo, s: Settings) -> Path:
@@ -80,11 +81,12 @@ def plan(s: Settings, media: MediaInfo, tools=None, workdir: Path | None = None)
             notes.append(translate("tasks", "Video is re-encoded from {0} to VP9. This is slow.")
                          .format(media.video.codec))
         else:
-            need_encoder(tools, "libx264")
-            args += ["-c:v", "libx264", "-crf", str(x264_crf), "-preset", s.preset,
-                     "-pix_fmt", "yuv420p"]
+            need_encoder(tools, h264_encoder(s.hw))
+            args = [*hw_global(s.hw), *args, *video_filter(s.hw),
+                    *h264_codec(s.hw, x264_crf, s.preset, pix_fmt=True)]
             notes.append(translate("tasks", "Video is re-encoded from {0} to H.264.")
                          .format(media.video.codec))
+            notes += hw_note(s.hw)
     if media.audio:
         args += ["-map", "0:a"]
         if all(a.codec in copy_audio for a in media.streams if a.kind == "audio"):

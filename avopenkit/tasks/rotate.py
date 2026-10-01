@@ -14,8 +14,8 @@ from pathlib import Path
 
 from ..core.job import Job, Plan
 from ..core.probe import MediaInfo
-from .base import (TaskError, check_encode, check_output, need_encoder, need_video, suggest,
-                   translate)
+from .base import (TaskError, check_encode, check_output, h264_codec, h264_encoder, hw_global,
+                   hw_note, need_encoder, need_video, suggest, translate, video_filter)
 
 ID = "rotate"
 METADATA_CONTAINERS = {".mp4", ".m4v", ".mov", ".mkv"}
@@ -32,6 +32,7 @@ class Settings:
     # Expert options, used only when baking in.
     crf: int = 18
     preset: str = "medium"
+    hw: object = None          # a working HwEncoder to use instead of libx264 when baking in
 
 
 def suggest_output(media: MediaInfo, s: Settings) -> Path:
@@ -65,13 +66,14 @@ def plan(s: Settings, media: MediaInfo, tools=None, workdir: Path | None = None)
                                         "is applied by re-encoding."))
 
     if bake:
-        need_encoder(tools, "libx264")
+        need_encoder(tools, h264_encoder(s.hw))
         check_encode(s.crf, s.preset)
-        args = ["-i", src, "-map", "0:v:0", "-map", "0:a?", "-vf", FILTER[s.action],
-                "-c:v", "libx264", "-crf", str(s.crf), "-preset", s.preset, "-c:a", "copy",
-                str(out)]
+        args = [*hw_global(s.hw), "-i", src, "-map", "0:v:0", "-map", "0:a?",
+                *video_filter(s.hw, FILTER[s.action]),
+                *h264_codec(s.hw, s.crf, s.preset), "-c:a", "copy", str(out)]
         notes.insert(0, translate("tasks", "Re-encodes the video with the picture turned, so "
                                            "every player shows it the same way."))
+        notes += hw_note(s.hw)
         return Plan([Job(args, [out], media.duration, label)], notes)
 
     if s.action in DELTA:

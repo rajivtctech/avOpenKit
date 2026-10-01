@@ -41,6 +41,38 @@ def check_kbps(kbps: int | None) -> None:
         raise TaskError(translate("tasks", "Audio bitrate must be between 8 and 512 kbit/s."))
 
 
+# -- H.264 encoding, software or hardware (spec F14) -------------------------------------
+
+def h264_encoder(hw) -> str:
+    return hw.encoder if hw is not None else "libx264"
+
+
+def hw_global(hw) -> list[str]:
+    """Arguments a hardware encoder needs before the inputs."""
+    return hw.global_args() if hw is not None else []
+
+
+def video_filter(hw, chain: str | None = None) -> list[str]:
+    """-vf with the task's own filters, followed by what a hardware encoder needs last."""
+    parts = [p for p in (chain, hw.filter_tail() if hw is not None else None) if p]
+    return ["-vf", ",".join(parts)] if parts else []
+
+
+def h264_codec(hw, crf: int, preset: str, pix_fmt: bool = False) -> list[str]:
+    if hw is not None:
+        return hw.codec_args(crf)
+    args = ["-c:v", "libx264", "-crf", str(crf), "-preset", preset]
+    return args + ["-pix_fmt", "yuv420p"] if pix_fmt else args
+
+
+def hw_note(hw) -> list[str]:
+    if hw is None:
+        return []
+    return [translate("tasks", "Encodes with the graphics chip ({0}): faster, but usually a "
+                               "little lower quality than the standard encoder at the same "
+                               "file size.").format(hw.label)]
+
+
 def secs(value: float) -> str:
     """Seconds as FFmpeg takes them on the command line."""
     return f"{value:.3f}"

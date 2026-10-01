@@ -7,7 +7,8 @@ from pathlib import Path
 
 from ..core.job import Job, Plan
 from ..core.probe import MediaInfo
-from .base import TaskError, check_encode, check_output, need_encoder, suggest, translate
+from .base import (TaskError, check_encode, check_output, h264_codec, h264_encoder, hw_global,
+                   hw_note, need_encoder, suggest, translate)
 
 ID = "join"
 
@@ -20,6 +21,7 @@ class Settings:
     reencode: bool = False     # re-encode even when the clips match
     crf: int = 20
     preset: str = "medium"
+    hw: object = None          # a working HwEncoder to use instead of libx264
 
 
 def suggest_output(media: MediaInfo, s: Settings) -> Path:
@@ -77,7 +79,7 @@ def plan(s: Settings, media: MediaInfo | None = None, tools=None,
     if any(c.video is None for c in clips):
         raise TaskError(translate("tasks", "The clips differ and one has no video; these cannot "
                                            "be joined."))
-    need_encoder(tools, "libx264")
+    need_encoder(tools, h264_encoder(s.hw))
     v0 = clips[0].video
     w, h = v0.width - v0.width % 2, v0.height - v0.height % 2
     fps = f"{v0.fps:.3f}".rstrip("0").rstrip(".") if v0.fps else "30"
@@ -91,18 +93,21 @@ def plan(s: Settings, media: MediaInfo | None = None, tools=None,
         if with_audio:
             graph.append(f"[{i}:a:0]aformat=sample_rates=48000:channel_layouts=stereo[a{i}]")
             pads += f"[a{i}]"
+    joined = "[v]" if s.hw is None else "[vj]"
     graph.append(f"{pads}concat=n={len(clips)}:v=1:a={1 if with_audio else 0}"
-                 + ("[v][a]" if with_audio else "[v]"))
-    args += ["-filter_complex", ";".join(graph), "-map", "[v]"]
+                 + (f"{joined}[a]" if with_audio else joined))
+    if s.hw is not None:
+        graph.append(f"[vj]{s.hw.filter_tail()}[v]")      # hand the joined frames to the chip
+    args = [*hw_global(s.hw), *args, "-filter_complex", ";".join(graph), "-map", "[v]"]
     args += ["-map", "[a]", "-c:a", "aac", "-b:a", "192k"] if with_audio else []
-    args += ["-c:v", "libx264", "-crf", str(s.crf), "-preset", s.preset, "-pix_fmt", "yuv420p",
-             str(out)]
+    args += [*h264_codec(s.hw, s.crf, s.preset, pix_fmt=True), str(out)]
     reason = (translate("tasks", "The clips do not match, so they are re-encoded to the first "
                                  "clip's size and frame rate ({0}×{1}, {2} fps).") if diff else
               translate("tasks", "The clips are re-encoded as asked, at the first clip's size "
                                  "and frame rate ({0}×{1}, {2} fps)."))
     notes = [reason.format(w, h, fps)]
     notes += diff
+    notes += hw_note(s.hw)
     if not with_audio:
         notes.append(translate("tasks", "At least one clip has no sound, so the result is silent."))
     return Plan([Job(args, [out], total, label)], notes)

@@ -15,7 +15,7 @@ from PyQt6.QtWidgets import (QCheckBox, QComboBox, QFileDialog, QFrame, QHBoxLay
                              QPushButton, QSplitter, QStackedWidget, QVBoxLayout, QWidget)
 
 from .. import __version__
-from ..core import errors
+from ..core import errors, hardware
 from ..core.ffmpeg import Tools
 from ..core.job import PLUMBING, CommandError, Plan, command_line, edited_plan
 from ..core.presets import PresetStore, clean_name
@@ -53,6 +53,8 @@ class MainWindow(QMainWindow):
         self._draft = 0                        # each queued job gets its own work folder
         self._shown: int | None = None         # queue item whose progress and log are shown
         self._applying_preset = False
+        self.hw = None                         # working hardware encoder in use, or None
+        self._hw_found: list | None = None     # encoders that passed the test, once looked for
         self.presets = PresetStore(self.settings)
         self.queue = JobQueue(tools, self)
         self.runner = self.queue.runner
@@ -68,6 +70,7 @@ class MainWindow(QMainWindow):
         self.tasks.setCurrentRow(0)
         self.expert_box.setChecked(self.settings.value("expert", False, type=bool))
         self._apply_mode()
+        self._restore_hardware()
         self.refresh()
 
     # ------------------------------------------------------------------ layout
@@ -265,8 +268,28 @@ class MainWindow(QMainWindow):
 
     # ------------------------------------------------------------------ settings and about
 
+    def hardware_found(self) -> list:
+        """Hardware encoders that pass a test encode with the FFmpeg in use. Looked for once."""
+        if self._hw_found is None:
+            QGuiApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+            try:
+                self._hw_found = hardware.detect(self.tools)
+            finally:
+                QGuiApplication.restoreOverrideCursor()
+        return self._hw_found
+
+    def _restore_hardware(self) -> None:
+        """Use the saved hardware encoder only if it still works; otherwise say so (F14)."""
+        wanted = self.settings.value("hardware", "", type=str)
+        self.hw = hardware.find(self.tools, wanted) if wanted else None
+        if wanted and self.hw is None:
+            self.status.setText(self.tr(
+                "The hardware encoder chosen in Settings is not working now, so the standard "
+                "encoder is being used."))
+
     def open_settings(self) -> None:
-        dialog = SettingsDialog(self.settings, self.tools, self.queue.running, self)
+        dialog = SettingsDialog(self.settings, self.tools, self.queue.running, self,
+                                hardware=self.hardware_found())
         if dialog.exec():
             self.apply_settings(dialog)
 
@@ -280,11 +303,20 @@ class MainWindow(QMainWindow):
                 self.tools.version_text, self.tools.ffmpeg))
         if dialog.language_changed:
             messages.append(self.tr("The language changes the next time avOpenKit starts."))
+        if dialog.hardware_changed or dialog.tools is not None:
+            self._restore_hardware()
+            if dialog.hardware_changed:
+                messages.append(self.tr("Hardware encoding: {0}.").format(self.hw.label)
+                                if self.hw else self.tr("Hardware encoding is off."))
+            elif self.status.text():
+                messages.append(self.status.text())
+            self.refresh()
         self.status.setText(" ".join(messages))
 
     def set_tools(self, tools: Tools) -> None:
         """Switch to a different FFmpeg (spec F16). Jobs already queued run with it too."""
         self.tools = tools
+        self._hw_found = None                  # another FFmpeg may have other encoders
         self.queue.runner.set_tools(tools)
         self.preview.tools = tools
         self._show_ffmpeg_in_status_bar()
@@ -560,6 +592,8 @@ class MainWindow(QMainWindow):
         if media is None and panel.needs_media():
             return None, self.tr("Open a file to begin.")
         settings = panel.settings()
+        if hasattr(settings, "hw"):
+            settings.hw = self.hw
         if media is not None and not self._output_custom:
             self.output.setText(str(self._free_name(panel.module.suggest_output(media, settings))))
         text = self.output.text().strip()

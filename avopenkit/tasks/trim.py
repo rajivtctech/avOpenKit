@@ -7,8 +7,9 @@ from pathlib import Path
 
 from ..core.job import Job, Plan
 from ..core.probe import MediaInfo
-from .base import (check_encode, check_kbps, check_output, check_range, clock, need_encoder, secs,
-                   suggest, translate)
+from .base import (check_encode, check_kbps, check_output, check_range, clock, h264_codec,
+                   h264_encoder, hw_global, hw_note, need_encoder, secs, suggest, translate,
+                   video_filter)
 
 ID = "trim"
 H264_CONTAINERS = {".mp4", ".m4v", ".mov", ".mkv"}
@@ -24,6 +25,7 @@ class Settings:
     crf: int = 18
     preset: str = "medium"
     audio_kbps: int = 192
+    hw: object = None          # a working HwEncoder to use instead of libx264 (spec F14)
 
 
 def suggest_output(media: MediaInfo, s: Settings) -> Path:
@@ -47,16 +49,17 @@ def plan(s: Settings, media: MediaInfo, tools=None, workdir: Path | None = None)
     src = str(media.path)
 
     if s.exact and media.video:
-        need_encoder(tools, "libx264")
+        need_encoder(tools, h264_encoder(s.hw))
         check_encode(s.crf, s.preset)
         check_kbps(s.audio_kbps)
-        args = ["-ss", secs(s.start), "-to", secs(end), "-i", src,
-                "-map", "0:v:0", "-map", "0:a?",
-                "-c:v", "libx264", "-crf", str(s.crf), "-preset", s.preset,
+        args = [*hw_global(s.hw), "-ss", secs(s.start), "-to", secs(end), "-i", src,
+                "-map", "0:v:0", "-map", "0:a?", *video_filter(s.hw),
+                *h264_codec(s.hw, s.crf, s.preset),
                 "-c:a", "aac", "-b:a", f"{s.audio_kbps}k", str(out)]
         notes = [translate("tasks", "Re-encodes the video so the cut is exact: {0} to {1} ({2}).")
                  .format(clock(s.start), clock(end), clock(end - s.start)),
-                 translate("tasks", "Slower than a fast trim, with a very small loss of quality.")]
+                 translate("tasks", "Slower than a fast trim, with a very small loss of quality."),
+                 *hw_note(s.hw)]
         return Plan([Job(args, [out], end - s.start, translate("tasks", "Trim (exact)"))], notes)
 
     args = ["-ss", secs(s.start), "-to", secs(end), "-i", src,

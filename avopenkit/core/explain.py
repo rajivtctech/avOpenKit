@@ -67,7 +67,11 @@ def token_spans(line: str, posix: bool | None = None) -> list[tuple[int, int, st
 def codec_name(codec: str) -> str:
     names = {
         "libx264": "H.264", "libx265": "H.265 (HEVC)", "libvpx-vp9": "VP9", "libvpx": "VP8",
-        "libsvtav1": "AV1", "aac": "AAC", "libopus": "Opus", "libmp3lame": "MP3",
+        "libsvtav1": "AV1", "aac": "AAC",
+        "h264_vaapi": translate("explain", "H.264, made by the graphics chip through VAAPI"),
+        "h264_qsv": translate("explain", "H.264, made by the graphics chip through Intel Quick Sync"),
+        "h264_nvenc": translate("explain", "H.264, made by the NVIDIA graphics chip"),
+        "h264_amf": translate("explain", "H.264, made by the AMD graphics chip"), "libopus": "Opus", "libmp3lame": "MP3",
         "libvorbis": "Vorbis", "flac": "FLAC", "ac3": "AC-3",
         "pcm_s16le": translate("explain", "uncompressed 16-bit audio"),
         "mov_text": translate("explain", "MP4 text subtitles"),
@@ -135,6 +139,7 @@ FILTERS = {
     "crop": lambda a: translate("explain", "cut the picture down to {0}").format(a),
     "format": lambda a: translate("explain", "convert the pixel format to {0}").format(a),
     "loudnorm": lambda a: translate("explain", "even out the loudness"),
+    "hwupload": lambda a: translate("explain", "pass the picture to the graphics chip for encoding"),
 }
 
 
@@ -222,6 +227,23 @@ OPTIONS = {
               translate("explain", "Play the GIF once and stop.") if v == "-1" else
               translate("explain", "Repeat the GIF {0} more times.").format(v)),
     "-metadata": (True, lambda v, s, st: translate("explain", "Label the stream: {0}.").format(v)),
+    "-vaapi_device": (True, lambda v, s, st: translate(
+        "explain", "Use the graphics chip at {0} for hardware encoding.").format(v)),
+    "-qp": (True, lambda v, s, st: translate(
+        "explain", "Quality setting {0} for the hardware encoder (quantiser). Lower is better "
+                   "quality and a larger file.").format(v)),
+    "-global_quality": (True, lambda v, s, st: translate(
+        "explain", "Quality setting {0} for the hardware encoder. Lower is better quality and "
+                   "a larger file.").format(v)),
+    "-cq": (True, lambda v, s, st: translate(
+        "explain", "Quality setting {0} for the hardware encoder. Lower is better quality and "
+                   "a larger file.").format(v)),
+    "-qp_i": (True, lambda v, s, st: translate(
+        "explain", "Quality setting {0} for the hardware encoder's key frames.").format(v)),
+    "-qp_p": (True, lambda v, s, st: translate(
+        "explain", "Quality setting {0} for the hardware encoder's in-between frames.").format(v)),
+    "-rc": (True, lambda v, s, st: translate(
+        "explain", "How the hardware encoder controls quality: {0}.").format(v)),
     "-r": (True, lambda v, s, st: translate("explain", "Set the frame rate to {0} frames per second.").format(v)),
     "-s": (True, lambda v, s, st: translate("explain", "Set the picture size to {0}.").format(v)),
     "-ar": (True, lambda v, s, st: translate("explain", "Set the audio sample rate to {0} Hz.").format(v)),

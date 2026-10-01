@@ -1,6 +1,6 @@
 # avOpenKit — Design
 
-Draft 9 · 2026-10-01 · implements SPECIFICATIONS.md Rev G · first code increment written, see §7
+Draft 10 · 2026-10-01 · implements SPECIFICATIONS.md Rev G · first code increment written, see §7
 
 Everything marked *tested* was run on this machine (Ubuntu 26.04, FFmpeg 8.0.1, Python 3.14.4,
 PyQt6 6.11.0 from pip in `.venv`) by the scripts in `trials/`. Anything not marked is a proposal.
@@ -152,6 +152,21 @@ Rules that keep the layers apart (spec N7):
   FFmpeg's output is taken to be the last argument. If a command has outputs the window does
   not know about and one exists, FFmpeg's own `-n` refuses it — the runner recognises that
   message and reports a failure, because FFmpeg's exit status is 0 in that case.
+- **Hardware encoding (F14).** `core/hardware.py`. FFmpeg lists every encoder it was built
+  with, whether or not the machine has the chip and driver: on the development laptop it
+  lists VAAPI, Quick Sync and NVENC, and only VAAPI works. An encoder is therefore offered
+  only after a short test encode succeeds, and the test uses the same arguments a real job
+  would. The choice is one setting (Settings → Hardware encoding, off by default) applied by
+  the five tasks that re-encode to H.264: exact trim, convert, join, bake-in rotation and
+  burned-in subtitles. Shrink always uses libx264, whose two-pass mode hits a target size
+  more accurately. Decoding and filtering stay in software; frames are handed to the chip at
+  the end of the filter chain. If the saved encoder stops working, the window falls back to
+  the standard encoder at start-up and says so.
+  **Tested here: VAAPI only**, with real jobs for all five tasks. The Quick Sync, NVENC and
+  AMF arguments have never run on working hardware; the test encode means a wrong argument
+  would show up as "not offered", not as a failed job, but the quality they give is unchecked.
+  The hardware quality number is the CRF passed straight through, which is only roughly the
+  same quality.
 - **Explanations (F12).** `core/explain.py` splits the command text into words by the same
   quoting rules the command box uses, and returns an explanation for each word's character
   range; an option and its value share one explanation. It works on the text as shown, so a
@@ -247,7 +262,7 @@ re-encodes and anything that will differ from what was asked.
 
 ## 7. Code status — first increment (0.1.0)
 
-Written and tested (215 tests: unit, real FFmpeg runs checked with `ffprobe`, and the window
+Written and tested (237 tests: unit, real FFmpeg runs checked with `ffprobe`, and the window
 and preview driven without a display):
 
 - `core/`: FFmpeg detection (F15, F16 path search), probing with keyframe times, job and plan
@@ -272,10 +287,10 @@ and preview driven without a display):
   and the Qt, PyQt6 and Python versions (spec §7 notices).
 - Hover explanations (F12): every part of the command, the arguments avOpenKit adds, and
   every option in every form.
+- Hardware encoding (F14), offered in Settings only for encoders that pass a test encode.
 - All interface text goes through Qt's translation calls; `pylupdate6` extracts 180 strings.
 
-Not yet written: hardware encoding (F14),
-the translations themselves, Windows packaging with bundled FFmpeg, User Guide.
+Not yet written: the translations themselves, Windows packaging with bundled FFmpeg, User Guide.
 
 Known limits: probing reads keyframe times on the window's thread, which will pause the
 window on very long files; the Windows build has not been run; the preview has only been

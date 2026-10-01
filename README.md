@@ -36,7 +36,9 @@ will really start at the keyframe before the point you chose.
 
 Rest the mouse on any part of the command to see what that part does, in plain words.
 
-**Settings** (Tools menu) chooses the language and, if you want, a different FFmpeg to use.
+**Settings** (Tools menu) chooses the language and, if you want, a different FFmpeg to use. It
+also offers **hardware encoding** when your graphics chip can do it; avOpenKit checks that the
+encoder really works on your computer before offering it, and it is off unless you turn it on.
 **About** (Help menu) shows exactly which FFmpeg is in use, its build configuration and licence.
 The program is prepared for eleven languages; a language appears in the chooser once its
 translation has been completed and checked. At present only English is available.
