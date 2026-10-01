@@ -82,7 +82,8 @@ def test_trim_runs_from_the_window(window, clips, tmp_path):
     window._output_edited()
     assert "-ss 2.000 -to 5.000" in window.console.toPlainText()
     window.run()
-    assert not window.run_button.isEnabled() and window.cancel_button.isEnabled()
+    assert window.cancel_button.isEnabled()
+    assert window.run_button.isEnabled()          # the form stays usable while a job runs
     ok, cancelled = wait_finished(window)
     assert ok and not cancelled
     assert probe.probe(out, window.tools).duration == pytest.approx(3, abs=0.2)

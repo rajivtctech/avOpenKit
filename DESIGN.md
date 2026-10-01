@@ -1,6 +1,6 @@
 # avOpenKit — Design
 
-Draft 6 · 2026-10-01 · implements SPECIFICATIONS.md Rev G · first code increment written, see §7
+Draft 7 · 2026-10-01 · implements SPECIFICATIONS.md Rev G · first code increment written, see §7
 
 Everything marked *tested* was run on this machine (Ubuntu 26.04, FFmpeg 8.0.1, Python 3.14.4,
 PyQt6 6.11.0 from pip in `.venv`) by the scripts in `trials/`. Anything not marked is a proposal.
@@ -152,6 +152,19 @@ Rules that keep the layers apart (spec N7):
   FFmpeg's output is taken to be the last argument. If a command has outputs the window does
   not know about and one exists, FFmpeg's own `-n` refuses it — the runner recognises that
   message and reports a failure, because FFmpeg's exit status is 0 in that case.
+- **Queue (F8).** Every run goes through `core/queue.py`. Run adds the current job and starts
+  the queue; Add to queue adds it without starting. The form stays usable while a job runs.
+  A failed job does not stop the queue; Cancel stops the running job and leaves the rest
+  waiting. Each queued job has its own work folder (`job0`, `job1`, …), so two shrink jobs
+  never share a pass-log file, and the folder is removed when the job ends. A result name
+  claimed by a waiting or running job cannot be claimed by another, and suggested names skip
+  claimed ones. Whether to replace an existing file is asked when the job is queued, not hours
+  later when it runs.
+- **Presets (F10).** One JSON object per task in `QSettings`. A preset stores the form, not the
+  file: start and end times, the subtitle file, the clips to join and the result name are left
+  out. Expert values are stored only when saved in expert mode. The built-in shrink presets
+  are sizes only (10, 25, 50, 100 MB) and become ordinary, editable presets once copied to the
+  user's settings; presets named after services wait for spec D7.
 - **Modes (F13).** Each task's settings carry the codec-level values (CRF, encoder speed, audio
   bitrate, and a few per task) with defaults equal to what simple mode has always produced.
   A panel passes its expert widgets on **only in expert mode**, so a value left in a hidden
@@ -212,7 +225,7 @@ re-encodes and anything that will differ from what was asked.
 
 ## 7. Code status — first increment (0.1.0)
 
-Written and tested (145 tests: unit, real FFmpeg runs checked with `ffprobe`, and the window
+Written and tested (170 tests: unit, real FFmpeg runs checked with `ffprobe`, and the window
 and preview driven without a display):
 
 - `core/`: FFmpeg detection (F15, F16 path search), probing with keyframe times, job and plan
@@ -228,10 +241,11 @@ and preview driven without a display):
   buttons; typing a time shows that moment.
 - Simple and expert modes (F13) with expert options on every task, remembered between runs;
   editing the command before it runs (F2), with Reset to return to the form's command.
+- Job queue (F8) with its list, Start, Remove and Clear finished; presets (F10) with save,
+  apply and delete per task.
 - All interface text goes through Qt's translation calls; `pylupdate6` extracts 180 strings.
 
-Not yet written: job
-queue (F8), presets (F10), hover explanations of command parts (F12), hardware encoding (F14),
+Not yet written: hover explanations of command parts (F12), hardware encoding (F14),
 Settings and About (F16, F17), translations, Windows packaging with bundled FFmpeg, User Guide.
 
 Known limits: probing reads keyframe times on the window's thread, which will pause the

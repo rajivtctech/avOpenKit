@@ -27,6 +27,9 @@ packaged downloads yet, and Windows has not been tested beyond a preview-player 
 and others) and lets you edit the command by hand before it runs. In simple mode those options
 are hidden and sensible defaults are used.
 
+Jobs can be **queued** and run one after another while you prepare the next, and a task's
+settings can be saved as a named **preset** and reused.
+
 Trim and Make a GIF have a preview with a scrub bar, so the start and end can be picked by
 looking. Before running, each task says in plain words what will happen — for example, that a fast trim
 will really start at the keyframe before the point you chose.

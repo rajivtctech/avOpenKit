@@ -49,6 +49,65 @@ class TaskPanel(QWidget):
     def attach_preview(self, preview) -> None:
         self.preview = preview
 
+    # -- presets (spec F10) --------------------------------------------------------------
+
+    def preset_fields(self) -> dict:
+        """name -> (widget, is_expert) for everything a preset stores. File-specific values
+        (start and end times, the subtitle file, the clips to join, the result name) are left
+        out: a preset is for reuse on other files."""
+        return {}
+
+    @staticmethod
+    def _read_widget(w):
+        if isinstance(w, (QSpinBox, QDoubleSpinBox)):
+            return w.value()
+        if isinstance(w, QComboBox):
+            return w.currentData() if w.currentData() is not None else w.currentText()
+        if isinstance(w, (QCheckBox, QRadioButton)):
+            return w.isChecked()
+        return w.text()
+
+    @staticmethod
+    def _write_widget(w, value) -> None:
+        if isinstance(w, (QSpinBox, QDoubleSpinBox)):
+            w.setValue(value)
+        elif isinstance(w, QComboBox):
+            index = w.findData(value)
+            if index < 0 and isinstance(value, str):
+                index = w.findText(value)
+            w.setCurrentIndex(max(index, 0))
+        elif isinstance(w, QRadioButton):
+            # An exclusive group cannot be unchecked directly: check the other button.
+            other = next((b for b in w.group().buttons() if b is not w), None) if w.group() else None
+            (w if value else other or w).setChecked(True)
+        elif isinstance(w, QCheckBox):
+            w.setChecked(bool(value))
+        else:
+            w.setText(str(value))
+
+    def state(self) -> dict:
+        """What a preset saves now: expert values only when expert mode is on."""
+        out = {name: self._read_widget(w) for name, (w, expert) in self.preset_fields().items()
+               if self.expert or not expert}
+        if self.expert and any(expert for _, expert in self.preset_fields().values()):
+            out["_expert"] = True
+        return out
+
+    def set_state(self, state: dict) -> bool:
+        """Apply a preset. Returns True when it holds expert values that simple mode ignores."""
+        self.blockSignals(True)
+        try:
+            for name, (w, _expert) in self.preset_fields().items():
+                if name in state:
+                    try:
+                        self._write_widget(w, state[name])
+                    except (TypeError, ValueError):
+                        pass                 # a preset from another version: skip that value
+        finally:
+            self.blockSignals(False)
+        self.changed.emit()
+        return bool(state.get("_expert")) and not self.expert
+
     def set_expert(self, on: bool) -> None:
         self.expert = on
         self.expert_box.setVisible(on)
@@ -70,7 +129,8 @@ class TaskPanel(QWidget):
 
     def _preset_box(self) -> QComboBox:
         box = QComboBox()
-        box.addItems(X264_PRESETS)
+        for name in X264_PRESETS:
+            box.addItem(name, name)
         box.setCurrentText("medium")
         box.setToolTip(self.tr("Encoder speed: slower presets make a smaller file at the same "
                                "quality, and take longer."))
@@ -156,6 +216,10 @@ class TrimPanel(TaskPanel):
         self.start.valueChanged.connect(self.changed)
         self.end.valueChanged.connect(self.changed)
 
+    def preset_fields(self) -> dict:
+        return {"exact": (self.exact, False), "crf": (self.crf, True),
+                "preset": (self.preset, True), "audio_kbps": (self.kbps, True)}
+
     def title(self) -> str:
         return self.tr("Trim")
 
@@ -210,6 +274,10 @@ class ShrinkPanel(TaskPanel):
         self.size.valueChanged.connect(self.changed)
         self.audio.currentIndexChanged.connect(self.changed)
 
+    def preset_fields(self) -> dict:
+        return {"size": (self.size, False), "audio_kbps": (self.audio, False),
+                "preset": (self.preset, True), "height": (self.height, True)}
+
     def title(self) -> str:
         return self.tr("Shrink to a size")
 
@@ -255,6 +323,11 @@ class ConvertPanel(TaskPanel):
         self.target.currentIndexChanged.connect(self.changed)
         self.quality.currentIndexChanged.connect(self.changed)
 
+    def preset_fields(self) -> dict:
+        return {"target": (self.target, False), "quality": (self.quality, False),
+                "reencode": (self.reencode, True), "crf": (self.crf, True),
+                "preset": (self.preset, True), "audio_kbps": (self.kbps, True)}
+
     def title(self) -> str:
         return self.tr("Convert format")
 
@@ -287,6 +360,9 @@ class AudioPanel(TaskPanel):
         self.expert_form.addRow(self.tr("Bitrate (MP3, M4A, Opus)"), self.kbps)
         self._finish()
         self.format.currentIndexChanged.connect(self.changed)
+
+    def preset_fields(self) -> dict:
+        return {"format": (self.format, False), "kbps": (self.kbps, True)}
 
     def title(self) -> str:
         return self.tr("Extract audio")
@@ -333,6 +409,10 @@ class JoinPanel(TaskPanel):
         remove.clicked.connect(self._remove)
         up.clicked.connect(lambda: self._move(-1))
         down.clicked.connect(lambda: self._move(1))
+
+    def preset_fields(self) -> dict:
+        return {"reencode": (self.reencode, True), "crf": (self.crf, True),
+                "preset": (self.preset, True)}
 
     def title(self) -> str:
         return self.tr("Join clips")
@@ -412,6 +492,10 @@ class RotatePanel(TaskPanel):
         self.action.currentIndexChanged.connect(self.changed)
         self.bake.toggled.connect(self.changed)
 
+    def preset_fields(self) -> dict:
+        return {"action": (self.action, False), "bake": (self.bake, False),
+                "crf": (self.crf, True), "preset": (self.preset, True)}
+
     def title(self) -> str:
         return self.tr("Fix rotation")
 
@@ -459,6 +543,11 @@ class GifPanel(TaskPanel):
         self._finish()
         for w in (self.start, self.length, self.width, self.fps):
             w.valueChanged.connect(self.changed)
+
+    def preset_fields(self) -> dict:
+        return {"length": (self.length, False), "width": (self.width, False),
+                "fps": (self.fps, False), "loop": (self.loop, True),
+                "dither": (self.dither, True)}
 
     def title(self) -> str:
         return self.tr("Make a GIF")
@@ -510,6 +599,10 @@ class SubtitlesPanel(TaskPanel):
         self._finish()
         browse.clicked.connect(self._browse)
         self.path.textChanged.connect(self.changed)
+
+    def preset_fields(self) -> dict:
+        return {"burn": (self.burn, False), "crf": (self.crf, True),
+                "preset": (self.preset, True), "language": (self.language, True)}
 
     def title(self) -> str:
         return self.tr("Subtitles")
