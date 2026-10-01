@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+from pathlib import Path
 
 from PyQt6.QtCore import QCoreApplication, QSettings
 from PyQt6.QtGui import QIcon
@@ -74,6 +75,22 @@ def self_test(path: str | None) -> int:
                              else "fell back to still pictures" if window.preview.stills
                              else "NO PICTURE"))
         ok = ok and (window.preview.got_frame or window.preview.stills)
+
+        # A real job, start to finish, through the same queue and runner the buttons use.
+        result = Path(scratch.name) / ("selftest-result" + Path(path).suffix)
+        panel = window.panel()
+        panel.start.setValue(0.5)
+        panel.end.setValue(min(2.0, window.media.duration))
+        window.output.setText(str(result))
+        window._output_edited()
+        window.run()
+        end = time.monotonic() + 60
+        while time.monotonic() < end and (window.queue.running or window.queue.waiting()):
+            app.processEvents(QEventLoop.ProcessEventsFlag.AllEvents, 20)
+        status = window.queue.items[-1].status if window.queue.items else "not started"
+        size = result.stat().st_size if result.exists() else 0
+        print(f"job: trim {status}, result {size} bytes")
+        ok = ok and status == "done" and size > 0
     window.close()
     print("self-test " + ("passed" if ok else "FAILED"))
     return 0 if ok else 1
