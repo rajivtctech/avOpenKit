@@ -125,11 +125,13 @@ def command_reference() -> str:
 
     section("Subtitles")
     out.append(_show("Add as a track, to an MP4",
-                     subtitles.plan(subtitles.Settings(Path("subs.srt"), False, Path("out.mp4")),
+                     subtitles.plan(subtitles.Settings(Path("/videos/subs.srt"), False,
+                                                       Path("/videos/out.mp4")),
                                     _media("/videos/in.mp4"))))
     out.append(_show("Add as a track, to an MKV, with the language set to hin (expert option)",
-                     subtitles.plan(subtitles.Settings(Path("subs.srt"), False, Path("out.mkv"),
-                                                       language="hin"), _media("/videos/in.mkv"))))
+                     subtitles.plan(subtitles.Settings(Path("/videos/subs.srt"), False,
+                                                       Path("/videos/out.mkv"), language="hin"),
+                                    _media("/videos/in.mkv"))))
     out.append(_show("Burn in",
                      subtitles.plan(subtitles.Settings(Path("/videos/subs.srt"), True,
                                                        Path("/videos/out.mp4")),

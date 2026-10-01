@@ -136,7 +136,7 @@ def original():
 
 
 def test_edited_plan_keeps_what_it_can_from_the_original():
-    p = edited_plan("ffmpeg -i in.mp4 -an 'my out.mp4'", original())
+    p = edited_plan('ffmpeg -i in.mp4 -an "my out.mp4"', original())     # double quotes: both systems
     job = p.jobs[0]
     assert job.args == ["-i", "in.mp4", "-an", "my out.mp4"] and job.edited
     assert job.duration == 12.5 and job.cwd == Path("/work")

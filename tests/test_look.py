@@ -265,7 +265,9 @@ def test_chips_wrap_instead_of_forcing_the_window_wider(app):
     for i in range(8):
         flow.addWidget(chip(f"a fairly long fact number {i}"))
     one_row = flow.heightForWidth(5000)
-    assert flow.heightForWidth(300) > 2 * one_row and flow.minimumSize().width() < 300
+    widest = flow.minimumSize().width()                  # one chip: fonts differ between systems
+    assert flow.heightForWidth(widest + 20) > 2 * one_row
+    assert widest < flow.itemAt(0).sizeHint().width() * 2
     flow.clear()
     assert flow.count() == 0
 

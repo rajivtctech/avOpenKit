@@ -18,12 +18,21 @@ def guide():
     return GUIDE.read_text(encoding="utf-8")
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="the guide shows commands as typed on Linux")
 def test_command_reference_is_what_the_program_generates(guide):
     """Part 7.3 is produced by the task modules. If this fails, run:
        .venv/bin/python tools/make_guide_assets.py reference"""
     start = guide.index(make_guide_assets.BEGIN) + len(make_guide_assets.BEGIN)
     end = guide.index(make_guide_assets.END)
     assert guide[start:end].strip() == make_guide_assets.command_reference().strip()
+
+
+def test_command_reference_does_not_depend_on_where_it_is_generated(guide, tmp_path, monkeypatch):
+    """No path from the machine that built the guide may appear in it."""
+    here = make_guide_assets.command_reference()
+    monkeypatch.chdir(tmp_path)
+    assert make_guide_assets.command_reference() == here
+    assert str(Path.home()) not in guide
 
 
 def test_every_task_has_commands_in_the_reference():

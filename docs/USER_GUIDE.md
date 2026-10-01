@@ -1043,13 +1043,13 @@ ffmpeg -ss 2.000 -t 3.000 -i in.mp4 -vf 'fps=12,scale=480:-1:flags=lanczos,split
 #### Add as a track, to an MP4
 
 ```
-ffmpeg -i /videos/in.mp4 -i /home/rajiv/Documents/avOpenKit/subs.srt -map '0:v?' -map '0:a?' -map '0:s?' -map 1:0 -c copy -c:s mov_text out.mp4
+ffmpeg -i /videos/in.mp4 -i /videos/subs.srt -map '0:v?' -map '0:a?' -map '0:s?' -map 1:0 -c copy -c:s mov_text /videos/out.mp4
 ```
 
 #### Add as a track, to an MKV, with the language set to hin (expert option)
 
 ```
-ffmpeg -i /videos/in.mkv -i /home/rajiv/Documents/avOpenKit/subs.srt -map '0:v?' -map '0:a?' -map '0:s?' -map 1:0 -c copy -c:s copy -metadata:s:s:0 language=hin out.mkv
+ffmpeg -i /videos/in.mkv -i /videos/subs.srt -map '0:v?' -map '0:a?' -map '0:s?' -map 1:0 -c copy -c:s copy -metadata:s:s:0 language=hin /videos/out.mkv
 ```
 
 #### Burn in

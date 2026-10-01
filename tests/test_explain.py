@@ -1,5 +1,7 @@
 """Explanations of the command's parts and of the form's options (spec F12)."""
 
+import sys
+
 import pytest
 from PyQt6.QtCore import QPoint
 from PyQt6.QtGui import QTextCursor
@@ -29,7 +31,9 @@ def test_token_spans_follow_the_quoting_of_the_command_box():
 
 def test_token_spans_match_what_is_actually_run():
     """Whatever the command box shows for a job, the words found are the job's arguments."""
-    args = ["-i", "it's a \"clip\".mp4", "-vf", "split[a][b];[a]palettegen[p]", "$HOME `x`.gif"]
+    # A double quote cannot occur in a Windows file name, so it is only tried elsewhere.
+    name = "it's a clip.mp4" if sys.platform == "win32" else "it's a \"clip\".mp4"
+    args = ["-i", name, "-vf", "split[a][b];[a]palettegen[p]", "$HOME `x`.gif"]
     text = command_line(Job(args))
     assert [v for _, _, v in token_spans(text)][1:] == args
 
