@@ -1,8 +1,17 @@
 avOpenKit does small, everyday jobs on video and audio files — trim, shrink to a size, convert,
-extract audio, join, fix rotation, make a GIF, add subtitles — and shows you the exact FFmpeg
-command it runs. Your original file is never overwritten.
+extract audio, join, fix rotation, make a GIF, add subtitles, crop to a shape, image sequences,
+contact sheets, change speed, export for editing — and shows you the exact FFmpeg command it
+runs. Your original file is never overwritten.
 
 **This is an early release.** Please read "What to know" below before relying on it.
+
+## New in 0.2.0
+
+- Five tasks for people who make pictures: **crop to a shape**, **image sequences** (video to
+  numbered pictures and back), **contact sheets**, **change speed**, and **export for editing**
+  (ProRes).
+- The downloads are now built and self-tested on the developer's machine: Linux in an Ubuntu
+  22.04 container, Windows in a Windows 11 virtual machine.
 
 ## Downloads
 
@@ -19,8 +28,8 @@ command it runs. Your original file is never overwritten.
 
 - **Windows may warn you.** The program is not signed with a publisher's certificate, so
   Windows may show "Windows protected your PC". Choose "More info", then "Run anyway".
-- **The Windows version is new.** It is built and self-tested automatically, but it has had
-  far less use than the Linux version.
+- **The Windows version is new.** It is built and self-tested in a Windows 11 virtual
+  machine, but it has had far less use than the Linux version.
 - **English only** for now.
 - **Ubuntu 22.04's own FFmpeg is too old** (4.4). On that system, install a newer FFmpeg and
   point avOpenKit to it in Settings.

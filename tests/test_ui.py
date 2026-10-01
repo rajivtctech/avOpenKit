@@ -41,8 +41,8 @@ def test_human_size():
     assert human_size(25_000_000) == "25.0 MB"
 
 
-def test_starts_empty_with_all_eight_tasks(window):
-    assert window.tasks.count() == 8
+def test_starts_empty_with_all_thirteen_tasks(window):
+    assert window.tasks.count() == 13
     assert not window.run_button.isEnabled() and window.console.toPlainText() == ""
 
 

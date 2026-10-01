@@ -79,7 +79,8 @@ def test_every_task_has_its_own_icon_and_description(app, tools):
     w = MainWindow(tools)
     try:
         names = [w.tasks.item(r).data(ICON_ROLE) for r in range(w.tasks.count())]
-        assert names == ["trim", "shrink", "convert", "audio", "join", "rotate", "gif", "subtitles"]
+        assert names == ["trim", "shrink", "convert", "audio", "join", "rotate", "gif", "subtitles",
+                         "crop", "sequence", "sheet", "speed", "export"]
         assert all(n in icons.STROKES for n in names)
         assert all(w.tasks.item(r).data(BLURB_ROLE) for r in range(w.tasks.count()))
     finally:

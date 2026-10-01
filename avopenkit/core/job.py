@@ -20,6 +20,9 @@ class Job:
     label: str = ""
     cwd: Path | None = None
     edited: bool = False                  # the user changed the command by hand (spec F2)
+    # Result folders to create just before the job starts (image sequences). Created by the
+    # runner only after it has checked that the result does not already exist.
+    make_dirs: list[Path] = field(default_factory=list)
 
 
 @dataclass
@@ -116,6 +119,6 @@ def edited_plan(text: str, original: Plan | None) -> Plan:
             raise CommandError("over_input", str(out))
         jobs.append(Job(args, [out] if out is not None else [],
                         base.duration if base else None, base.label if base else "",
-                        cwd, edited=True))
+                        cwd, edited=True, make_dirs=list(base.make_dirs) if base else []))
     return Plan(jobs, [], dict(original.write_files) if original else {},
                 list(original.copy_files) if original else [])

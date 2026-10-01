@@ -58,6 +58,13 @@ def prepare(plan: Plan) -> None:
         shutil.copyfile(src, dst)
 
 
+def make_result_dirs(job: Job) -> None:
+    """Create a job's result folders. Called only after the existing-result check, so a
+    folder made here is this run's own and may be removed if the job fails."""
+    for folder in job.make_dirs:
+        Path(folder).mkdir(parents=True, exist_ok=True)
+
+
 def existing_outputs(job: Job) -> list[Path]:
     return [Path(p) for p in job.outputs if Path(p).exists()]
 
@@ -73,7 +80,10 @@ def remove_outputs(job: Job) -> None:
     """Delete a job's partial output. Only ever called for files this run was allowed to write."""
     for p in job.outputs:
         try:
-            Path(p).unlink()
+            if Path(p).is_dir():
+                shutil.rmtree(p)          # a folder of frames this run was making
+            else:
+                Path(p).unlink()
         except OSError:
             pass
 
@@ -93,6 +103,7 @@ def run_blocking(job: Job, tools: Tools, on_progress=None, overwrite: bool = Fal
     """
     if not overwrite and (taken := existing_outputs(job)):
         return RunResult(False, -1, exists_message(taken))
+    make_result_dirs(job)
     kwargs = {}
     if sys.platform == "win32":
         kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
@@ -191,6 +202,7 @@ if QObject is not None:
                 self._finish(False)
                 return
             self._started = self._index + 1
+            make_result_dirs(job)
             self._tail = ""
             self._parser = ProgressParser()
             p = QProcess(self)

@@ -4,19 +4,22 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PyQt6.QtCore import pyqtSignal
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (QAbstractItemView, QButtonGroup, QCheckBox, QComboBox,
                              QDoubleSpinBox, QFileDialog, QFormLayout, QGroupBox, QHBoxLayout,
                              QLabel, QLineEdit, QListWidget, QPushButton, QRadioButton,
-                             QSpinBox, QVBoxLayout, QWidget)
+                             QSlider, QSpinBox, QStackedWidget, QVBoxLayout, QWidget)
 
 from ..core.probe import MediaInfo
-from ..tasks import audio, convert, gif, join, rotate, shrink, subtitles, trim
-from ..tasks.base import X264_PRESETS
+from ..tasks import (audio, convert, crop, export, gif, join, rotate, sequence, sheet, shrink,
+                     speed, subtitles, trim)
+from ..tasks.base import X264_PRESETS, shown_size
 from . import icons
+from .widgets import CropView
 
 MEDIA_FILTER = "*.mp4 *.m4v *.mov *.mkv *.webm *.avi *.wmv *.flv *.mpg *.mpeg *.ts *.3gp " \
-               "*.mp3 *.m4a *.aac *.wav *.flac *.ogg *.opus *.wma *.gif"
+               "*.mp3 *.m4a *.aac *.wav *.flac *.ogg *.opus *.wma *.gif " \
+               "*.png *.jpg *.jpeg *.tif *.tiff *.bmp *.webp"
 
 
 def seconds_box(maximum: float = 86400.0) -> QDoubleSpinBox:
@@ -166,6 +169,9 @@ class TaskPanel(QWidget):
         row.addWidget(box, 1)
         row.addWidget(button)
         return row
+
+    def set_poster(self, image) -> None:
+        """A frame from the open file, for forms that show the picture."""
 
     def _take_position(self, box: QDoubleSpinBox) -> None:
         if self.preview is not None and self.preview.media is not None:
@@ -709,5 +715,341 @@ class SubtitlesPanel(TaskPanel):
         return s
 
 
+class CropPanel(TaskPanel):
+    module = crop
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self.shape = QComboBox()
+        self.shape.addItem(self.tr("Square (1:1)"), "1:1")
+        self.shape.addItem(self.tr("Portrait (4:5)"), "4:5")
+        self.shape.addItem(self.tr("Tall (9:16) - for phone screens"), "9:16")
+        self.shape.setToolTip(self.tr("The shape the picture is cut to. The size is the "
+                                      "largest of that shape that fits inside the picture."))
+        self.position = QSlider(Qt.Orientation.Horizontal)
+        self.position.setRange(0, 100)
+        self.position.setValue(50)
+        self.position.setToolTip(self.tr("Slide to choose which part of the picture is kept."))
+        self.low, self.high = QLabel(self.tr("Left")), QLabel(self.tr("Right"))
+        slide = QHBoxLayout()
+        slide.addWidget(self.low)
+        slide.addWidget(self.position, 1)
+        slide.addWidget(self.high)
+        self.view = CropView()
+        self.view.setText(self.tr("A picture of the crop appears here."))
+        self.view.setToolTip(self.tr("The bright part is what will be kept."))
+        self.form.addRow(self.tr("Shape"), self.shape)
+        self.form.addRow(self.tr("Keep"), slide)
+        self.form.addRow(self.view)
+        self.crf, self.preset = self._crf_box(18), self._preset_box()
+        self.expert_form.addRow(self.tr("Quality (CRF)"), self.crf)
+        self.expert_form.addRow(self.tr("Encoder speed"), self.preset)
+        self._finish()
+        self.shape.currentIndexChanged.connect(self._moved)
+        self.position.valueChanged.connect(self._moved)
+
+    def title(self) -> str:
+        return self.tr("Crop to a shape")
+
+    def blurb(self) -> str:
+        return self.tr("Cut the picture to a square or tall shape for sharing.")
+
+    def preset_fields(self) -> dict:
+        return {"shape": (self.shape, False), "position": (self.position, False),
+                "crf": (self.crf, True), "preset": (self.preset, True)}
+
+    def _read_widget(self, w):
+        return w.value() if isinstance(w, QSlider) else TaskPanel._read_widget(w)
+
+    def _write_widget(self, w, value) -> None:
+        if isinstance(w, QSlider):
+            w.setValue(int(value))
+        else:
+            TaskPanel._write_widget(w, value)
+
+    def set_media(self, media) -> None:
+        super().set_media(media)
+        self.view.set_image(None)
+        self._show_box()
+
+    def set_poster(self, image) -> None:
+        self.view.set_image(image)
+
+    def _moved(self, *_args) -> None:
+        self._show_box()
+        self.changed.emit()
+
+    def _show_box(self) -> None:
+        if self.media is None or self.media.video is None:
+            self.view.set_box(None)
+            return
+        width, height = shown_size(self.media)
+        cw, ch, x, y, sides = crop.crop_box(width, height, self.shape.currentData(),
+                                           self.position.value() / 100)
+        self.low.setText(self.tr("Left") if sides else self.tr("Top"))
+        self.high.setText(self.tr("Right") if sides else self.tr("Bottom"))
+        self.view.set_box((x / width, y / height, cw / width, ch / height))
+
+    def settings(self):
+        s = crop.Settings(self.shape.currentData(), self.position.value() / 100)
+        if self.expert:
+            s.crf, s.preset = self.crf.value(), self.preset.currentText()
+        return s
+
+
+class SequencePanel(TaskPanel):
+    module = sequence
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self.mode = QLabel("")
+        self.mode.setWordWrap(True)
+        self.mode.setObjectName("hint")
+        self.form.addRow(self.mode)
+
+        # video -> pictures
+        self.format = QComboBox()
+        self.format.addItem(self.tr("PNG - exact, larger files"), "png")
+        self.format.addItem(self.tr("JPEG - smaller files"), "jpg")
+        self.format.setToolTip(self.tr("PNG keeps every pixel exactly. JPEG is much smaller "
+                                       "and loses a little."))
+        self.rate = QComboBox()
+        self.rate.addItem(self.tr("Every frame"), 0.0)
+        for per_second in (1, 2, 5, 10):
+            self.rate.addItem(self.tr("{0} per second of video").format(per_second),
+                              float(per_second))
+        self.rate.setToolTip(self.tr("Every frame gives the most pictures. Fewer per second "
+                                     "is usually enough to choose stills from."))
+        to_pictures = QWidget()
+        f1 = QFormLayout(to_pictures)
+        f1.setContentsMargins(0, 0, 0, 0)
+        f1.addRow(self.tr("Save as"), self.format)
+        f1.addRow(self.tr("How many"), self.rate)
+
+        # pictures -> video
+        self.fps = QDoubleSpinBox()
+        self.fps.setRange(1.0, 240.0)
+        self.fps.setDecimals(2)
+        self.fps.setValue(24.0)
+        self.fps.setToolTip(self.tr("How many of the pictures are shown each second. 24 is "
+                                    "usual for film and animation, 12 for a rougher look."))
+        to_video = QWidget()
+        f2 = QFormLayout(to_video)
+        f2.setContentsMargins(0, 0, 0, 0)
+        f2.addRow(self.tr("Pictures per second"), self.fps)
+
+        self.pages = QStackedWidget()
+        self.pages.addWidget(to_pictures)
+        self.pages.addWidget(to_video)
+        self.form.addRow(self.pages)
+
+        self.jpeg = QSpinBox()
+        self.jpeg.setRange(2, 31)
+        self.jpeg.setValue(2)
+        self.jpeg.setToolTip(self.tr("JPEG quality: 2 is the best; larger numbers make "
+                                     "smaller, rougher pictures."))
+        self.crf, self.preset = self._crf_box(18), self._preset_box()
+        self.jpeg.valueChanged.connect(self.changed)
+        self.expert_form.addRow(self.tr("JPEG quality, video to pictures"), self.jpeg)
+        self.expert_form.addRow(self.tr("Quality (CRF), pictures to video"), self.crf)
+        self.expert_form.addRow(self.tr("Encoder speed, pictures to video"), self.preset)
+        self._finish()
+        self.format.currentIndexChanged.connect(self.changed)
+        self.rate.currentIndexChanged.connect(self.changed)
+        self.fps.valueChanged.connect(self.changed)
+        self._show_mode()
+
+    def title(self) -> str:
+        return self.tr("Image sequence")
+
+    def blurb(self) -> str:
+        return self.tr("Turn a video into numbered pictures, or numbered pictures into a video.")
+
+    def preset_fields(self) -> dict:
+        return {"format": (self.format, False), "rate": (self.rate, False),
+                "fps": (self.fps, False), "jpeg_quality": (self.jpeg, True),
+                "crf": (self.crf, True), "preset": (self.preset, True)}
+
+    def set_media(self, media) -> None:
+        super().set_media(media)
+        self._show_mode()
+
+    def _show_mode(self) -> None:
+        pictures = self.media is not None and sequence.is_image(self.media)
+        self.pages.setCurrentIndex(1 if pictures else 0)
+        self.pages.widget(0).setVisible(not pictures)
+        self.pages.widget(1).setVisible(pictures)
+        self.mode.setText(
+            self.tr("A picture is open, so its numbered series is made into a video.")
+            if pictures else
+            self.tr("A video is open, so it is saved as numbered pictures. To go the other "
+                    "way, open the first picture of a numbered series."))
+
+    def settings(self):
+        s = sequence.Settings(self.format.currentData(), self.rate.currentData(),
+                              self.fps.value())
+        if self.expert:
+            s.jpeg_quality, s.crf, s.preset = (self.jpeg.value(), self.crf.value(),
+                                               self.preset.currentText())
+        return s
+
+
+class SheetPanel(TaskPanel):
+    module = sheet
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self.columns, self.rows = QSpinBox(), QSpinBox()
+        for box, value in ((self.columns, 4), (self.rows, 4)):
+            box.setRange(1, 12)
+            box.setValue(value)
+        self.columns.setToolTip(self.tr("How many frames across."))
+        self.rows.setToolTip(self.tr("How many frames down. Columns times rows is the number "
+                                     "of frames taken, evenly spaced through the video."))
+        self.width = QSpinBox()
+        self.width.setRange(64, 1920)
+        self.width.setSingleStep(40)
+        self.width.setValue(320)
+        self.width.setSuffix(" px")
+        self.width.setToolTip(self.tr("The width of each small frame. The height follows."))
+        self.format = QComboBox()
+        self.format.addItem(self.tr("JPEG - smaller file"), "jpg")
+        self.format.addItem(self.tr("PNG - exact"), "png")
+        self.format.setToolTip(self.tr("JPEG suits a sheet to look at or send. PNG keeps every "
+                                       "pixel exactly."))
+        self.form.addRow(self.tr("Columns"), self.columns)
+        self.form.addRow(self.tr("Rows"), self.rows)
+        self.form.addRow(self.tr("Width of each frame"), self.width)
+        self.form.addRow(self.tr("Save as"), self.format)
+        self.padding = QSpinBox()
+        self.padding.setRange(0, 100)
+        self.padding.setValue(6)
+        self.padding.setSuffix(" px")
+        self.padding.setToolTip(self.tr("The black gap between the frames and around the "
+                                        "edge."))
+        self.expert_form.addRow(self.tr("Gap"), self.padding)
+        self._finish()
+        for w in (self.columns, self.rows, self.width, self.padding):
+            w.valueChanged.connect(self.changed)
+        self.format.currentIndexChanged.connect(self.changed)
+
+    def title(self) -> str:
+        return self.tr("Contact sheet")
+
+    def blurb(self) -> str:
+        return self.tr("Lay frames from across a video out as one picture.")
+
+    def preset_fields(self) -> dict:
+        return {"columns": (self.columns, False), "rows": (self.rows, False),
+                "tile_width": (self.width, False), "format": (self.format, False),
+                "padding": (self.padding, True)}
+
+    def settings(self):
+        width = self.width.value() - self.width.value() % 2
+        s = sheet.Settings(self.columns.value(), self.rows.value(), width,
+                           self.format.currentData())
+        if self.expert:
+            s.padding = self.padding.value()
+        return s
+
+
+class SpeedPanel(TaskPanel):
+    module = speed
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self.factor = QComboBox()
+        self.factor.addItem(self.tr("8 times faster - time-lapse"), 8.0)
+        self.factor.addItem(self.tr("4 times faster"), 4.0)
+        self.factor.addItem(self.tr("2 times faster"), 2.0)
+        self.factor.addItem(self.tr("Half speed - slow motion"), 0.5)
+        self.factor.addItem(self.tr("Quarter speed"), 0.25)
+        self.factor.setCurrentIndex(2)
+        self.factor.setToolTip(self.tr("How much faster or slower the result plays."))
+        self.sound = QCheckBox(self.tr("Keep the sound, at the new speed"))
+        self.sound.setChecked(True)
+        self.sound.setToolTip(self.tr("The sound is sped up or slowed to match and keeps its "
+                                      "pitch. Untick for a silent result, usual for a "
+                                      "time-lapse."))
+        self.form.addRow(self.tr("Speed"), self.factor)
+        self.form.addRow("", self.sound)
+        self.exact_speed = QDoubleSpinBox()
+        self.exact_speed.setRange(0.0, 100.0)
+        self.exact_speed.setDecimals(2)
+        self.exact_speed.setSingleStep(0.25)
+        self.exact_speed.setSpecialValueText(self.tr("From the choice above"))
+        self.exact_speed.setSuffix(" ×")
+        self.exact_speed.setToolTip(self.tr("An exact speed, from 0.1 to 100 times. 1.5 is half as "
+                                      "fast again; 0.8 is slightly slow."))
+        self.crf, self.preset = self._crf_box(18), self._preset_box()
+        self.expert_form.addRow(self.tr("Exact speed"), self.exact_speed)
+        self.expert_form.addRow(self.tr("Quality (CRF)"), self.crf)
+        self.expert_form.addRow(self.tr("Encoder speed"), self.preset)
+        self._finish()
+        self.factor.currentIndexChanged.connect(self.changed)
+        self.sound.toggled.connect(self.changed)
+        self.exact_speed.valueChanged.connect(self.changed)
+
+    def title(self) -> str:
+        return self.tr("Change speed")
+
+    def blurb(self) -> str:
+        return self.tr("Make a time-lapse or slow motion.")
+
+    def preset_fields(self) -> dict:
+        return {"factor": (self.factor, False), "keep_sound": (self.sound, False),
+                "exact": (self.exact_speed, True), "crf": (self.crf, True),
+                "preset": (self.preset, True)}
+
+    def settings(self):
+        s = speed.Settings(self.factor.currentData(), self.sound.isChecked())
+        if self.expert:
+            s.crf, s.preset = self.crf.value(), self.preset.currentText()
+            if self.exact_speed.value() > 0:
+                s.factor = self.exact_speed.value()
+        return s
+
+
+class ExportPanel(TaskPanel):
+    module = export
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self.quality = QComboBox()
+        self.quality.addItem(self.tr("ProRes 422 Proxy - smallest, for rough cuts"), "proxy")
+        self.quality.addItem(self.tr("ProRes 422 LT"), "lt")
+        self.quality.addItem(self.tr("ProRes 422 - the usual choice"), "standard")
+        self.quality.addItem(self.tr("ProRes 422 HQ - highest quality, largest"), "hq")
+        self.quality.setCurrentIndex(2)
+        self.quality.setToolTip(self.tr("Higher qualities keep more detail and make larger "
+                                        "files. Ask your editor which they want; ProRes 422 "
+                                        "is the usual answer."))
+        self.form.addRow(self.tr("Quality"), self.quality)
+        self.bits = QComboBox()
+        self.bits.addItem(self.tr("16 bits"), 16)
+        self.bits.addItem(self.tr("24 bits"), 24)
+        self.bits.setToolTip(self.tr("The precision of the uncompressed sound. 16 bits is "
+                                     "standard; 24 is used in professional sound work."))
+        self.expert_form.addRow(self.tr("Sound"), self.bits)
+        self._finish()
+        self.quality.currentIndexChanged.connect(self.changed)
+        self.bits.currentIndexChanged.connect(self.changed)
+
+    def title(self) -> str:
+        return self.tr("Export for editing")
+
+    def blurb(self) -> str:
+        return self.tr("Save as ProRes, the format editing programs handle best.")
+
+    def preset_fields(self) -> dict:
+        return {"quality": (self.quality, False), "audio_bits": (self.bits, True)}
+
+    def settings(self):
+        s = export.Settings(self.quality.currentData())
+        if self.expert:
+            s.audio_bits = self.bits.currentData()
+        return s
+
+
 PANELS = [TrimPanel, ShrinkPanel, ConvertPanel, AudioPanel, JoinPanel, RotatePanel, GifPanel,
-          SubtitlesPanel]
+          SubtitlesPanel, CropPanel, SequencePanel, SheetPanel, SpeedPanel, ExportPanel]

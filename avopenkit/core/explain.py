@@ -72,7 +72,8 @@ def codec_name(codec: str) -> str:
         "h264_qsv": translate("explain", "H.264, made by the graphics chip through Intel Quick Sync"),
         "h264_nvenc": translate("explain", "H.264, made by the NVIDIA graphics chip"),
         "h264_amf": translate("explain", "H.264, made by the AMD graphics chip"), "libopus": "Opus", "libmp3lame": "MP3",
-        "libvorbis": "Vorbis", "flac": "FLAC", "ac3": "AC-3",
+        "libvorbis": "Vorbis", "flac": "FLAC", "ac3": "AC-3", "prores_ks": "ProRes",
+        "pcm_s24le": translate("explain", "uncompressed 24-bit audio"),
         "pcm_s16le": translate("explain", "uncompressed 16-bit audio"),
         "mov_text": translate("explain", "MP4 text subtitles"),
         "webvtt": "WebVTT", "srt": "SubRip", "subrip": "SubRip", "gif": "GIF", "ppm": "PPM",
@@ -118,9 +119,28 @@ def explain_codec(value: str, spec: str) -> str:
     return translate("explain", "Encode {0} as {1} (encoder: {2}).").format(which, codec_name(value), value)
 
 
+def _explain_crop(args: str) -> str:
+    parts = args.split(":")
+    if len(parts) == 4:
+        return translate("explain", "cut the picture down to {0}×{1}, starting {2} pixels from "
+                                    "the left and {3} from the top").format(*parts)
+    return translate("explain", "cut the picture down to {0}").format(args)
+
+
 FILTERS = {
-    "scale": lambda a: translate("explain", "resize the picture to {0} (-1 or -2 keeps the proportions; -2 also "
-                          "keeps the size even)").format("×".join(a.split(":")[:2])),
+    "scale": lambda a: (
+        translate("explain", "round the picture's width and height down to even numbers, "
+                             "which H.264 needs") if "trunc(" in a else
+        translate("explain", "resize the picture to {0} (-1 or -2 keeps the proportions; -2 also "
+                             "keeps the size even)").format("×".join(a.split(":")[:2]))),
+    "setpts": lambda a: translate("explain", "change when each frame is shown ({0}): dividing the "
+                                  "time by a number plays the video that many times faster")
+                        .format(a),
+    "atempo": lambda a: translate("explain", "play the sound {0} times as fast without changing "
+                                  "its pitch").format(a),
+    "trim": lambda a: translate("explain", "take only the first frame"),
+    "tile": lambda a: translate("explain", "lay the frames out in a grid of {0}, with a gap "
+                                "between and around them").format(a.split(":")[0]),
     "fps": lambda a: translate("explain", "change the frame rate to {0} frames per second").format(a),
     "transpose": lambda a: {"1": translate("explain", "turn the picture 90° to the right"),
                             "2": translate("explain", "turn the picture 90° to the left")}.get(
@@ -136,7 +156,7 @@ FILTERS = {
     "setsar": lambda a: translate("explain", "mark the pixels as square"),
     "aformat": lambda a: translate("explain", "convert the sound to a common sample rate and channel layout"),
     "concat": lambda a: translate("explain", "join the clips end to end"),
-    "crop": lambda a: translate("explain", "cut the picture down to {0}").format(a),
+    "crop": lambda a: _explain_crop(a),
     "format": lambda a: translate("explain", "convert the pixel format to {0}").format(a),
     "loudnorm": lambda a: translate("explain", "even out the loudness"),
     "hwupload": lambda a: translate("explain", "pass the picture to the graphics chip for encoding"),
@@ -171,7 +191,11 @@ def _bitrate(value: str, spec: str) -> str:
 
 # name -> (takes a value, explanation(value, stream specifier, state))
 OPTIONS = {
-    "-i": (True, lambda v, s, st: translate("explain", "Input file number {0}: {1}").format(st["inputs"], v)),
+    "-i": (True, lambda v, s, st: (
+        translate("explain", "Input number {0}: a numbered series of pictures, {1}. The part "
+                             "beginning with % stands for the number.").format(st["inputs"], v)
+        if re.search(r"%0?\d*d", v) else
+        translate("explain", "Input file number {0}: {1}").format(st["inputs"], v))),
     "-ss": (True, lambda v, s, st: _seek(v, st)),
     "-to": (True, lambda v, s, st: translate("explain", "Stop at {0} seconds.").format(v)),
     "-t": (True, lambda v, s, st: translate("explain", "Take {0} seconds from the starting point.").format(v)),
@@ -187,9 +211,19 @@ OPTIONS = {
         "Encoder speed \"{0}\". Slower presets make a smaller file at the same quality and "
         "take longer.").format(v)),
     "-b": (True, lambda v, s, st: _bitrate(v, s)),
-    "-q": (True, lambda v, s, st: translate("explain", 
-        "Quality level {0} for the audio encoder (for MP3, lower is better; 2 is high "
-        "quality).").format(v)),
+    "-q": (True, lambda v, s, st: (
+        translate("explain", "Picture quality level {0} for JPEG: 2 is the best, larger "
+                             "numbers make smaller, rougher pictures.").format(v)
+        if s.startswith("v") else
+        translate("explain", "Quality level {0} for the audio encoder (for MP3, lower is "
+                             "better; 2 is high quality).").format(v))),
+    "-framerate": (True, lambda v, s, st: translate(
+        "explain", "Show the pictures that follow at {0} per second.").format(v)),
+    "-start_number": (True, lambda v, s, st: translate(
+        "explain", "The numbered series starts at picture number {0}.").format(v)),
+    "-fps_mode": (True, lambda v, s, st: translate(
+        "explain", "Keep exactly the frames the video has, without adding or dropping any.")
+        if v == "passthrough" else translate("explain", "How frame timing is handled: {0}.").format(v)),
     "-pix_fmt": (True, lambda v, s, st: translate("explain", 
         "Store colour as {0}. yuv420p is the format nearly every player and phone accepts.").format(v)),
     "-pass": (True, lambda v, s, st: translate("explain", 
@@ -252,7 +286,9 @@ OPTIONS = {
     "-vframes": (True, lambda v, s, st: translate("explain", "Stop after {0} video frames.").format(v)),
     "-g": (True, lambda v, s, st: translate("explain", "Put a keyframe at least every {0} frames.").format(v)),
     "-tune": (True, lambda v, s, st: translate("explain", "Tune the encoder for this kind of material: {0}.").format(v)),
-    "-profile": (True, lambda v, s, st: translate("explain", "Limit the encoder to the \"{0}\" feature set, for older players.").format(v)),
+    "-profile": (True, lambda v, s, st: translate(
+        "explain", "Which variety of the format to make: {0}. For ProRes, 0 is Proxy, 1 is LT, "
+                   "2 is the standard ProRes 422 and 3 is HQ.").format(v)),
     "-level": (True, lambda v, s, st: translate("explain", "Limit the encoder to level {0}, for older players.").format(v)),
     "-threads": (True, lambda v, s, st: translate("explain", "Use {0} processor threads.").format(v)),
     "-shortest": (False, lambda v, s, st: translate("explain", "Stop when the shortest input ends.")),
@@ -324,6 +360,10 @@ def explain_line(line: str, offset: int = 0, posix: bool | None = None) -> list[
                 i += 1
         elif word == "-":
             add(i, translate("explain", "No result file: the output is discarded."))
+        elif i == last and re.search(r"%0?\d*d", word):
+            add(i, translate("explain", "The results: a numbered series of files, {0}. The part "
+                                        "beginning with % is replaced by each picture's number.")
+                .format(word))
         elif i == last:
             add(i, translate("explain", "The result file: {0}. FFmpeg chooses the file format from its ending.")
                 .format(word))

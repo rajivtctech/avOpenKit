@@ -8,3 +8,4 @@ dist/
 .pytest_cache/
 .venv-build/
 packaging/ffmpeg-win/
+.container-files

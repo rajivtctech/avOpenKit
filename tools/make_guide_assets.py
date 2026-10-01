@@ -54,7 +54,8 @@ def _show(title: str, plan, extra: str = "") -> str:
 
 def command_reference() -> str:
     from avopenkit.core.hardware import HwEncoder
-    from avopenkit.tasks import audio, convert, gif, join, rotate, shrink, subtitles, trim
+    from avopenkit.tasks import (audio, convert, crop, export, gif, join, rotate, sequence, sheet,
+                                 shrink, speed, subtitles, trim)
     work = Path("WORK")
     vaapi = HwEncoder("vaapi", "h264_vaapi", "VAAPI", "/dev/dri/renderD128")
     m = _media(keyframes=(0, 2, 4, 6, 8, 10))
@@ -136,6 +137,50 @@ def command_reference() -> str:
                      subtitles.plan(subtitles.Settings(Path("/videos/subs.srt"), True,
                                                        Path("/videos/out.mp4")),
                                     _media("/videos/in.mp4"), workdir=work)))
+    section("Crop to a shape")
+    out.append(_show("Square, keeping the middle, from a 1280×720 video",
+                     crop.plan(crop.Settings("1:1", 0.5, Path("out.mp4")), m)))
+    out.append(_show("Tall (9:16), keeping the right",
+                     crop.plan(crop.Settings("9:16", 1.0, Path("out.mp4")), m)))
+
+    section("Image sequence")
+    out.append(_show("A video into pictures: every frame, as PNG",
+                     sequence.plan(sequence.Settings("png", 0, output=Path("/videos/in-frames")),
+                                   _media("/videos/in.mp4"))))
+    out.append(_show("A video into pictures: 2 per second, as JPEG",
+                     sequence.plan(sequence.Settings("jpg", 2, output=Path("/videos/in-frames")),
+                                   _media("/videos/in.mp4"))))
+    series = sequence.Series("/videos/frame-%04d.png", 1, 48, "frame-0001.png",
+                             "frame-0048.png", "frame")
+    real_find = sequence.find_series
+    sequence.find_series = lambda path: series            # no files are needed for the example
+    try:
+        out.append(_show("Pictures into a video: frame-0001.png to frame-0048.png at 24 per second",
+                         sequence.plan(sequence.Settings(fps=24, output=Path("/videos/out.mp4")),
+                                       _media("/videos/frame-0001.png", vcodec="png", acodec=None))))
+    finally:
+        sequence.find_series = real_find
+
+    section("Contact sheet")
+    out.append(_show("Two columns and two rows from a 60-second video (four frames)",
+                     sheet.plan(sheet.Settings(2, 2, 320, "jpg", Path("out.jpg")), m),
+                     "A sheet with more frames has one `-ss … -i` pair and one filter step for "
+                     "each frame."))
+
+    section("Change speed")
+    out.append(_show("2 times faster, keeping the sound",
+                     speed.plan(speed.Settings(2.0, True, Path("out.mp4")), m)))
+    out.append(_show("8 times faster, without sound",
+                     speed.plan(speed.Settings(8.0, False, Path("out.mp4")), m)))
+    out.append(_show("Quarter speed, keeping the sound",
+                     speed.plan(speed.Settings(0.25, True, Path("out.mp4")), m),
+                     "One `atempo` step can halve the speed at most, so a quarter is two steps."))
+
+    section("Export for editing")
+    out.append(_show("ProRes 422",
+                     export.plan(export.Settings("standard", Path("out.mov")), m)))
+    out.append(_show("ProRes 422 HQ with 24-bit sound (expert option)",
+                     export.plan(export.Settings("hq", Path("out.mov"), audio_bits=24), m)))
     return "\n\n".join(out)
 
 
@@ -249,6 +294,14 @@ def screenshots() -> None:
     shot(w, "queue.png")
     for item in list(w.queue.items):
         w.queue.remove(item.id)
+
+    # 3a. Crop to a shape: the picture of what will be kept.
+    w.tasks.setCurrentRow(8)
+    panel = w.panel()
+    panel.shape.setCurrentIndex(panel.shape.findData("9:16"))
+    panel.position.setValue(70)
+    spin(4, lambda: panel.view._image is not None)
+    shot(w, "crop.png")
 
     # 4. Expert mode: options shown, and a command edited by hand.
     w.tasks.setCurrentRow(2)

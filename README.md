@@ -13,10 +13,10 @@ keeps its quality.
 avOpenKit is not a video editor: there is no timeline and no project file. It covers the small
 jobs in between a converter and an editor.
 
-**Status: early release (0.1.0).** Downloads for Linux and Windows are on the
+**Status: early release (0.2.0).** Downloads for Linux and Windows are on the
 [releases page](https://github.com/rajivtctech/avOpenKit/releases). The Windows build is new: it
-is built and self-tested automatically and has been run in a Windows 11 virtual machine, but has
-had far less use than the Linux one. English only for now.
+is built and self-tested in a Windows 11 virtual machine, but has had far less use than the
+Linux one. English only for now.
 
 ## Tasks
 
@@ -30,6 +30,11 @@ had far less use than the Linux one. English only for now.
 | Fix rotation | Change the stored rotation instantly, or bake it in for players that ignore it. |
 | Make a GIF | A section of video as a looping GIF with a proper colour palette. |
 | Subtitles | Burn into the picture, or add as a track that can be switched on and off. |
+| Crop to a shape | Square, 4:5 or 9:16 for sharing, with a picture showing what will be kept. |
+| Image sequence | A video into numbered pictures, or numbered pictures into a video. |
+| Contact sheet | Frames from across a video, laid out as one picture. |
+| Change speed | Time-lapse and slow motion, with the sound keeping its pitch. |
+| Export for editing | ProRes in a MOV file, for handing work to an editor. |
 
 **Expert mode** adds codec-level options to every task (quality, encoder speed, audio bitrate
 and others) and lets you edit the command by hand before it runs. In simple mode those options
@@ -58,8 +63,9 @@ translation has been completed and checked. At present only English is available
 | Linux, 64-bit, Ubuntu 22.04 or newer | `avOpenKit-linux-x86_64` | One file. Needs FFmpeg 6.0 or newer installed. `chmod +x` it, then run it. |
 | Windows 10 / 11, 64-bit | `avOpenKit-windows-x64.zip` | Extract the folder, run `avOpenKit.exe`. FFmpeg is included. |
 
-Both are built by [GitHub Actions](.github/workflows/build.yml) from this repository; a tag
-starting with `v` publishes a release. What is inside them, and under which licences, is listed
+The released files are built on the developer's machine with the scripts described below, and
+published with `packaging/release_local.sh`. [GitHub Actions](.github/workflows/build.yml)
+builds and tests both from this repository on every push, as an independent check. What is inside them, and under which licences, is listed
 in [THIRD-PARTY-NOTICES.md](packaging/THIRD-PARTY-NOTICES.md).
 
 ## Run from source (Linux)
@@ -83,6 +89,42 @@ dist/avOpenKit --self-test FILE   # check a build: FFmpeg found, window built, p
 The binary carries Python and Qt with it, but not FFmpeg: it uses the `ffmpeg` and `ffprobe`
 installed on the computer. A binary runs only on systems whose C library is at least as new as
 the one it was built on, so one built on Ubuntu 26.04 will not start on older distributions.
+
+To get a file that runs on Ubuntu 22.04 and newer whatever this machine runs, build it in an
+Ubuntu 22.04 container instead:
+
+```
+packaging/build_linux_container.sh   # makes dist/avOpenKit-linux-x86_64
+```
+
+This needs `podman` (`sudo apt install podman`; no root is needed to run it). The first run
+makes the build image from [packaging/Containerfile](packaging/Containerfile), about 1 GB,
+which is the only step that uses the network. Each build then runs with the network off: it
+runs the tests, builds the program, self-tests it inside the container and again on this
+machine.
+
+## Build the Windows download on this machine
+
+```
+packaging/build_windows_vm.sh     # makes dist/avOpenKit-windows-x64.zip
+```
+
+PyInstaller cannot build a Windows program from Linux, so this runs the build inside a Windows
+virtual machine on the same computer (VMware Workstation, a VM at `~/vmware/Windows11-Pro`). It
+stages the source, FFmpeg and the Python packages, starts the VM without a window, builds,
+runs the packaged program's self-test there, and brings back the zip and the logs. After the
+first run, which caches its downloads, it needs no network.
+
+## Publish a release
+
+```
+packaging/release_local.sh        # needs both downloads in dist/ and the tag's commit pushed
+```
+
+It checks that both files in `dist/` report the version in `avopenkit/__init__.py`, adds the
+User Guide, the FFmpeg source archive, the notices and checksums, and creates the GitHub
+release `v<version>` from them. GitHub Actions also builds the two downloads on every push;
+it publishes a release only when run by hand with "publish" ticked.
 
 ## Tests
 

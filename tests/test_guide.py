@@ -39,7 +39,8 @@ def test_command_reference_does_not_depend_on_where_it_is_generated(guide, tmp_p
 def test_every_task_has_commands_in_the_reference():
     reference = make_guide_assets.command_reference()
     for heading in ("Trim", "Shrink to a size", "Convert format", "Extract audio", "Join clips",
-                    "Fix rotation", "Make a GIF", "Subtitles"):
+                    "Fix rotation", "Make a GIF", "Subtitles", "Crop to a shape",
+                    "Image sequence", "Contact sheet", "Change speed", "Export for editing"):
         assert f"### {heading}\n" in reference
     assert reference.count("```") >= 50 and "h264_vaapi" in reference
 
@@ -65,7 +66,7 @@ def test_every_button_and_label_the_guide_quotes_exists_in_the_program(guide):
 
 def test_every_figure_exists(guide):
     figures = re.findall(r"!\[[^\]]*\]\(([^)]+)\)", guide)
-    assert len(figures) == 7
+    assert len(figures) == 8
     for name in figures:
         assert (GUIDE.parent / name).is_file(), name
 

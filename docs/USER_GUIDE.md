@@ -2,14 +2,16 @@
 title: "avOpenKit"
 subtitle: "User Guide — from first day to expert"
 author: "T&C Technology"
-date: "For version 0.1.0 — 1 October 2026"
+date: "For version 0.2.0 — 1 October 2026"
 ---
 
 # About this guide
 
 avOpenKit does small, everyday jobs on video and audio files: cutting a piece out, making a
 video small enough to send, changing the file type, pulling out the sound, joining clips, turning
-a sideways video upright, making a GIF, and adding subtitles.
+a sideways video upright, making a GIF, and adding subtitles. For people who make pictures it
+also crops a video to a shape for sharing, turns a video into numbered pictures and back, lays
+frames out as a contact sheet, makes time-lapses and slow motion, and exports for an editor.
 
 **You do not need to read all of this guide.** Start with the part written for you and come back
 to the others when you need them.
@@ -18,14 +20,14 @@ to the others when you need them.
 |---|---|---|
 | **Part 1 — Getting started** | everyone | what the program is, why your files are safe, how to install and start it, what each area of the window is for |
 | **Part 2 — Your first job** | beginners | trimming a video, step by step, from opening the file to playing the result |
-| **Part 3 — The eight tasks** | everyone | what each task does, what each question means, and what to expect |
+| **Part 3 — The tasks** | everyone | what each task does, what each question means, and what to expect |
 | **Part 4 — Working faster** | regular users | the preview, the queue, presets, and reading the command |
 | **Part 5 — Expert mode and settings** | experienced users | codec-level options, editing the command, hardware encoding, choosing the FFmpeg to use |
 | **Part 6 — Problems and diagnostics** | anyone stuck | what each message means, common puzzles, what to send with a bug report |
 | **Part 7 — Expert reference** | engineers | every command each task generates, all defaults and limits, how the program is built |
 | **Appendix** | everyone | a one-page quick reference, and a glossary |
 
-**How this guide is written.** Everything here describes version 0.1.0 as it actually behaves.
+**How this guide is written.** Everything here describes version 0.2.0 as it actually behaves.
 The commands in Part 7 are produced by the program itself each time the guide is built, so they
 cannot drift from what the program does. Where something has not been tested, or does not exist
 yet, the guide says so plainly; the list is in section 7.8.
@@ -174,7 +176,7 @@ work; **"Fix rotation"** needs version 6.0.
 |---|---|---|
 | **Menus** | top | **"Tools" → "Settings…"** and **"Help" → "About avOpenKit"** |
 | **"Expert mode"** | top right | Shows extra options and lets you edit the command (Part 5). The small button beside it opens Settings. |
-| **Task list** | left | The eight tasks, each with its picture and a line saying what it does. Click one to choose it. |
+| **Task list** | left | The thirteen tasks, each with its picture and a line saying what it does. Click one to choose it. |
 | **Queue** | bottom left | Jobs waiting, running and finished (Part 4). |
 | **The file** | top of the right-hand side | A picture from the file, its name, and its facts as small labels: length, size, and what video and sound it contains. **"Open a file…"** opens another. You can also drag a file from your file manager and drop it anywhere on the window. |
 | **Preview and filmstrip** | below the task's name | For **"Trim"** and **"Make a GIF"** only: the video, a strip of frames from the whole file, **"Play"** and **"Mute"**. |
@@ -288,7 +290,7 @@ messages and what to do.
 
 To stop a job that is running, press **"Cancel"**. The unfinished file is deleted.
 
-# Part 3 — The eight tasks
+# Part 3 — The tasks
 
 Every task works the same way: open a file, choose the task, answer the questions, read what
 will happen, press **"Run"**. This part describes each task's questions and what to expect.
@@ -477,6 +479,114 @@ sites do.
 A track can be added to MP4, MOV, MKV and WebM files. For other types the result is suggested as
 an MKV.
 
+## 3.9 Crop to a shape
+
+*Cut the picture to a square or tall shape for sharing.* Result: `name-cropped`.
+
+![Crop to a shape: the bright part is what will be kept.](img/crop.png)
+
+| Question | Meaning |
+|---|---|
+| **"Shape"** | **"Square (1:1)"**, **"Portrait (4:5)"** or **"Tall (9:16) - for phone screens"**. |
+| **"Keep"** | A slider that chooses which part of the picture stays: from **"Left"** to **"Right"** when the sides are cut off, from **"Top"** to **"Bottom"** when the top and bottom are. |
+
+A small picture of your video shows the result before you run anything: the part that will be
+kept is bright and the rest is dimmed. Move the slider and watch it move.
+
+**What it does.** The crop is the largest piece of that shape that fits inside the picture.
+Nothing is stretched or shrunk, so the cropped video is as sharp as the original. The video is
+re-encoded; the sound is copied untouched. If the picture is already the shape you chose, the
+program says so.
+
+A video that plays turned (filmed with the phone upright, for instance) is cropped as you see
+it, not as it is stored.
+
+## 3.10 Image sequence
+
+*Turn a video into numbered pictures, or numbered pictures into a video.*
+
+This task works in two directions, and chooses by itself from the file you have open.
+
+**A video is open: it is saved as pictures.** Result: a new folder, `name-frames`, holding
+`frame-00001.png`, `frame-00002.png`, and so on.
+
+| Question | Meaning |
+|---|---|
+| **"Save as"** | **"PNG - exact, larger files"** keeps every pixel. **"JPEG - smaller files"** is much smaller and loses a little. |
+| **"How many"** | **"Every frame"**, or 1, 2, 5 or 10 pictures per second of video. |
+
+The note box tells you roughly how many pictures there will be. Every frame of even a short
+video is a great many files — a one-minute video at 30 frames per second is 1800 pictures — so
+choose fewer per second unless you need them all, or trim the video first.
+
+The result is always a **new** folder. If a folder of that name exists, the program asks you to
+choose another name rather than mix pictures into it.
+
+**A picture is open: its series is made into a video.** Open the *first* picture of a numbered
+series — `frame-0001.png`, with `frame-0002.png`, `frame-0003.png` and the rest beside it in
+the same folder. Result: `name-video.mp4`.
+
+| Question | Meaning |
+|---|---|
+| **"Pictures per second"** | How many of the pictures are shown each second. 24 is usual for film and animation; 12 gives a rougher, hand-made look. |
+
+The note box says how many pictures it found, from which to which, and how long the video will
+be. The series is counted from the picture you opened, upwards, and stops at the first missing
+number.
+
+Pictures with an odd width or height are trimmed by one pixel, because the video format needs
+even numbers.
+
+## 3.11 Contact sheet
+
+*Lay frames from across a video out as one picture.* Result: `name-sheet.jpg`.
+
+| Question | Meaning |
+|---|---|
+| **"Columns"**, **"Rows"** | How many frames across and down, from 1 to 12 each. Columns times rows is the number of frames. |
+| **"Width of each frame"** | In pixels. The height follows. |
+| **"Save as"** | **"JPEG - smaller file"** or **"PNG - exact"**. |
+
+**What it does.** The frames are taken at even steps through the whole video, so the sheet
+shows the video from start to end at a glance. The note box tells you how far apart the frames
+are and how large the finished picture will be. It is quick even for a long film, because each
+frame is fetched by jumping straight to its moment.
+
+## 3.12 Change speed
+
+*Make a time-lapse or slow motion.* Result: `name-fast` or `name-slow`.
+
+| Question | Meaning |
+|---|---|
+| **"Speed"** | **"8 times faster - time-lapse"**, **"4 times faster"**, **"2 times faster"**, **"Half speed - slow motion"** or **"Quarter speed"**. |
+| **"Keep the sound, at the new speed"** | The sound is sped up or slowed to match, and keeps its pitch — voices do not turn squeaky or deep. Untick it for a silent result, which is usual for a time-lapse. |
+
+The note box tells you how long the result will be.
+
+**About slow motion.** Slowing a video down cannot invent frames that were never filmed: each
+frame is simply shown for longer. It looks smooth only if the video was filmed at a high frame
+rate (60 or 120 frames per second). An ordinary 30-frames-per-second video at quarter speed
+will look jerky.
+
+## 3.13 Export for editing
+
+*Save as ProRes, the format editing programs handle best.* Result: `name-prores.mov`.
+
+| Choice under **"Quality"** | Use it when |
+|---|---|
+| **"ProRes 422 Proxy - smallest, for rough cuts"** | You need small working copies. |
+| **"ProRes 422 LT"** | A lighter version of the usual choice. |
+| **"ProRes 422 - the usual choice"** | You are not sure. |
+| **"ProRes 422 HQ - highest quality, largest"** | The editor asks for HQ. |
+
+**What it does.** The videos that phones and cameras make are compressed very tightly, which
+makes them small but hard work for an editing program to move through. ProRes stores every
+frame whole, so editing is smooth.
+
+**Expect a very large file** — many times the size of the original. This task is for handing
+work to an editor, not for sending or sharing. If in doubt, ask the editor which quality they
+want.
+
 # Part 4 — Working faster
 
 ## 4.1 The preview
@@ -609,6 +719,13 @@ affect the result. Switching to expert mode without touching anything changes no
 | | **"Encoder speed, when baking in"** | | medium |
 | Make a GIF | **"Repeat for ever"** | Untick for a GIF that plays once | on |
 | | **"Dithering"** | How the 256 colours are mixed to imitate the rest | Sierra |
+| Crop to a shape | **"Quality (CRF)"**, **"Encoder speed"** | | 18, medium |
+| Image sequence | **"JPEG quality, video to pictures"** | 2 is the best; larger numbers make smaller, rougher pictures | 2 |
+| | **"Quality (CRF), pictures to video"**, **"Encoder speed, pictures to video"** | | 18, medium |
+| Contact sheet | **"Gap"** | The black space between frames and around the edge | 6 px |
+| Change speed | **"Exact speed"** | Any speed from 0.1 to 100 times, instead of the list | from the list |
+| | **"Quality (CRF)"**, **"Encoder speed"** | | 18, medium |
+| Export for editing | **"Sound"** | 16 or 24 bits | 16 bits |
 | Subtitles | **"Language of the track"** | A two- or three-letter code such as `hin`, `eng`, `spa`, so players list the track by language | empty |
 | | **"Quality (CRF), when burning in"** | | 20 |
 | | **"Encoder speed, when burning in"** | | medium |
@@ -700,8 +817,8 @@ working hardware encoder was found on this computer."**
 
 | | |
 |---|---|
-| Used by | **"Trim"** (exact), **"Convert format"**, **"Join clips"**, **"Fix rotation"** (bake in) and **"Subtitles"** (burn in) — whenever they re-encode video to H.264. |
-| Not used by | **"Shrink to a size"**. The ordinary encoder hits a target size more accurately. |
+| Used by | **"Trim"** (exact), **"Convert format"**, **"Join clips"**, **"Fix rotation"** (bake in), **"Subtitles"** (burn in), **"Crop to a shape"**, **"Change speed"** and **"Image sequence"** (pictures to video) — whenever they re-encode video to H.264. |
+| Not used by | **"Shrink to a size"** (the ordinary encoder hits a target size more accurately), and tasks that do not make H.264: **"Make a GIF"**, **"Contact sheet"**, **"Export for editing"**. |
 | The trade | Faster, but usually a little lower quality than the ordinary encoder at the same file size. The note box says when the graphics chip is in use. |
 | If it stops working | After a driver change, say. The program notices at start-up, goes back to the ordinary encoder, and tells you. |
 
@@ -733,6 +850,13 @@ These appear *before* you run a job, in a red note box labelled **"Cannot run ye
 | … MB is too small for a video … s long. | In **"Shrink"**, choose a larger size, or trim the video first. |
 | The length of this file is unknown … | **"Shrink"** needs the length to work out a quality. Try **"Convert format"** to MP4 first and shrink the result; a converted file normally has a known length. |
 | Add at least two clips to join. | **"Join clips"** needs two or more files in its list. |
+| The picture is already this shape. | **"Crop to a shape"**: there is nothing to cut. Choose another shape. |
+| … already exists. Choose a new folder name … | **"Image sequence"** always saves into a new folder. Change the name in the **"Result:"** box. |
+| The result is a folder of pictures. Give it a folder name, without a file ending. | **"Image sequence"**: the result's name ends in `.png` or similar. Remove the ending. |
+| Open the first picture of a numbered series … | **"Image sequence"**: the picture you opened has no number in its name, or the next number is missing. |
+| Save the sheet as a .jpg or .png file. | **"Contact sheet"**: change the result's ending. |
+| A speed of 1 leaves the video as it is. … | **"Change speed"** (expert mode): choose a speed other than 1. |
+| ProRes is saved in a .mov file. | **"Export for editing"**: change the result's ending to `.mov`. |
 | The clips differ and one has no video; these cannot be joined. | Remove the sound-only file from the list. |
 | Choose a subtitle file. | Press **"Browse…"** in **"Subtitles"**. |
 | The subtitle file must be .srt, .ass, .ssa or .vtt. | The chosen file is not a subtitle file avOpenKit can use. |
@@ -1096,6 +1220,86 @@ ffmpeg -i /videos/in.mp4 -map 0:v:0 -map '0:a?' -vf subtitles=subs.srt -c:v libx
 
 run in the work folder, after copying `/videos/subs.srt` to `WORK/subs.srt`.
 
+### Crop to a shape
+
+#### Square, keeping the middle, from a 1280×720 video
+
+```
+ffmpeg -i in.mp4 -map 0:v:0 -map '0:a?' -vf crop=720:720:280:0 -c:v libx264 -crf 18 -preset medium -pix_fmt yuv420p -c:a copy out.mp4
+```
+
+#### Tall (9:16), keeping the right
+
+```
+ffmpeg -i in.mp4 -map 0:v:0 -map '0:a?' -vf crop=404:720:876:0 -c:v libx264 -crf 18 -preset medium -pix_fmt yuv420p -c:a copy out.mp4
+```
+
+### Image sequence
+
+#### A video into pictures: every frame, as PNG
+
+```
+ffmpeg -i /videos/in.mp4 -fps_mode passthrough /videos/in-frames/frame-%05d.png
+```
+
+#### A video into pictures: 2 per second, as JPEG
+
+```
+ffmpeg -i /videos/in.mp4 -vf fps=2 -q:v 2 /videos/in-frames/frame-%05d.jpg
+```
+
+#### Pictures into a video: frame-0001.png to frame-0048.png at 24 per second
+
+```
+ffmpeg -framerate 24 -start_number 1 -i /videos/frame-%04d.png -vf 'scale=trunc(iw/2)*2:trunc(ih/2)*2' -c:v libx264 -crf 18 -preset medium -pix_fmt yuv420p /videos/out.mp4
+```
+
+### Contact sheet
+
+#### Two columns and two rows from a 60-second video (four frames)
+
+```
+ffmpeg -ss 7.500 -i in.mp4 -ss 22.500 -i in.mp4 -ss 37.500 -i in.mp4 -ss 52.500 -i in.mp4 -filter_complex '[0:v:0]trim=end_frame=1,scale=320:-2,setsar=1[v0];[1:v:0]trim=end_frame=1,scale=320:-2,setsar=1[v1];[2:v:0]trim=end_frame=1,scale=320:-2,setsar=1[v2];[3:v:0]trim=end_frame=1,scale=320:-2,setsar=1[v3];[v0][v1][v2][v3]concat=n=4:v=1:a=0,tile=2x2:padding=6:margin=6:color=black[sheet]' -map '[sheet]' -frames:v 1 -q:v 2 out.jpg
+```
+
+A sheet with more frames has one `-ss … -i` pair and one filter step for each frame.
+
+### Change speed
+
+#### 2 times faster, keeping the sound
+
+```
+ffmpeg -i in.mp4 -map 0:v:0 -map 0:a:0 -vf setpts=PTS/2 -c:v libx264 -crf 18 -preset medium -pix_fmt yuv420p -af atempo=2 -c:a aac -b:a 192k out.mp4
+```
+
+#### 8 times faster, without sound
+
+```
+ffmpeg -i in.mp4 -map 0:v:0 -vf setpts=PTS/8 -c:v libx264 -crf 18 -preset medium -pix_fmt yuv420p -an out.mp4
+```
+
+#### Quarter speed, keeping the sound
+
+```
+ffmpeg -i in.mp4 -map 0:v:0 -map 0:a:0 -vf setpts=PTS/0.25 -c:v libx264 -crf 18 -preset medium -pix_fmt yuv420p -af atempo=0.5,atempo=0.5 -c:a aac -b:a 192k out.mp4
+```
+
+One `atempo` step can halve the speed at most, so a quarter is two steps.
+
+### Export for editing
+
+#### ProRes 422
+
+```
+ffmpeg -i in.mp4 -map 0:v:0 -map '0:a?' -c:v prores_ks -profile:v 2 -pix_fmt yuv422p10le -c:a pcm_s16le out.mov
+```
+
+#### ProRes 422 HQ with 24-bit sound (expert option)
+
+```
+ffmpeg -i in.mp4 -map 0:v:0 -map '0:a?' -c:v prores_ks -profile:v 3 -pix_fmt yuv422p10le -c:a pcm_s24le out.mov
+```
+
 <!-- END GENERATED COMMANDS -->
 
 ## 7.4 Defaults and limits
@@ -1180,6 +1384,48 @@ have fully downloaded.
 | Track, WebM | WebVTT |
 | Burn in | The `subtitles` filter; libx264 CRF 20 preset medium; sound copied. The subtitle file is copied to a plain name in the work folder and FFmpeg is run from there, so that awkward characters in its real name cannot upset the filter. |
 
+### Crop to a shape
+
+| | |
+|---|---|
+| Shapes | 1:1, 4:5 and 9:16 (width : height). |
+| Size | The largest piece of the shape that fits inside the picture as displayed (after any stored rotation), with width and height rounded down to even numbers. |
+| Encoding | `crop` filter; libx264 CRF 18 preset medium, yuv420p; sound copied (re-encoded to AAC at 192 kbit/s only when the file type has to change to MP4). |
+
+### Image sequence
+
+| | |
+|---|---|
+| Video to pictures | `frame-%05d.png` or `.jpg` in a new folder. "Every frame" uses `-fps_mode passthrough`, so exactly the video's frames are written; otherwise the `fps` filter picks the chosen number per second. JPEG quality 2. |
+| Never into an existing folder | A result folder that exists is refused. A folder made by a job that fails or is cancelled is removed. |
+| Pictures to video | The series is found from the opened file's name: the last run of digits before the ending is the number. Numbers with leading zeros are read as fixed width (`%04d`), others as plain (`%d`). A `%` in a folder or file name is written `%%`. libx264 CRF 18 preset medium, yuv420p; sizes rounded down to even. |
+| Picture types opened | PNG, JPEG, TIFF, BMP, WebP. |
+
+### Contact sheet
+
+| | |
+|---|---|
+| Frames | Columns × rows (up to 12 × 12), at the middle of equal slices of the length. |
+| Method | One input per frame, each with its own seek and trimmed to its first frame; then `concat` and `tile`. Decoding the whole file is avoided. |
+| Size | Columns × frame width, plus a 6-pixel gap between frames and around the edge; the frame height keeps the picture's proportions, rounded to even. JPEG quality 2, or PNG. |
+
+### Change speed
+
+| | |
+|---|---|
+| Range | 0.1 to 100 times (the list offers 8, 4, 2, 0.5 and 0.25; any value in expert mode). |
+| Video | `setpts=PTS/speed`. The frame rate is unchanged: frames are dropped when faster and repeated when slower. No frames are interpolated. |
+| Sound | `atempo`, which keeps the pitch. One step covers 0.5 to 100, so slower speeds chain halves: 0.25 is `atempo=0.5,atempo=0.5`. AAC at 192 kbit/s. |
+| Encoding | libx264 CRF 18 preset medium, yuv420p. |
+
+### Export for editing
+
+| | |
+|---|---|
+| Video | `prores_ks`, profile 0 (Proxy), 1 (LT), 2 (422) or 3 (HQ), 10-bit 4:2:2 (`yuv422p10le`). |
+| Sound | Uncompressed PCM, 16 bits (24 in expert mode). |
+| File | MOV. |
+
 ### Preview
 
 | | |
@@ -1215,6 +1461,8 @@ not as a failed job. The quality they give has not been checked.
 | Convert to WebM | `libvpx-vp9`, `libopus` |
 | Extract audio | `libmp3lame` for MP3, `libopus` for Opus |
 | Make a GIF | `palettegen`, `paletteuse` |
+| Contact sheet | `tile`, `concat`, `trim` |
+| Export for editing | `prores_ks` |
 | Subtitles, burn in | `subtitles` (which needs FFmpeg built with libass) |
 | Fix rotation | FFmpeg 6.0 or newer, for `-display_rotation` |
 
@@ -1240,7 +1488,7 @@ trademark of Fabrice Bellard.
 
 | | |
 |---|---|
-| Windows | The Windows download is built and checked automatically, and has been run in one Windows 11 virtual machine: the program started, showed a video with its filmstrip, and trimmed a file with the FFmpeg supplied. The other seven tasks, the queue, presets and Settings have been checked on Windows only by the program's automatic tests, not by hand. |
+| Windows | The Windows download is built in one Windows 11 virtual machine and checked there by its self-test: the program started, showed a video, and trimmed a file with the FFmpeg supplied. An earlier build was also looked at on screen there, with a video and its filmstrip. The other tasks, the queue, presets and Settings have been checked on Windows only by the program's automatic tests, not by hand. |
 | English only | No translation has been made yet (section 5.4). |
 | The queue is not saved | Closing the program discards waiting jobs. |
 | No batch folders | Running one task over a whole folder of files is not offered. |
@@ -1264,6 +1512,12 @@ trademark of Fabrice Bellard.
 | Turn a sideways video | **Fix rotation** | Try without "Bake in" first; use it if some player ignores the turn. |
 | Make a GIF | **Make a GIF** | Short and narrow keeps it small. |
 | Add subtitles | **Subtitles** | Track = can be switched off. Burn in = always visible. |
+| Make it square or tall for sharing | **Crop to a shape** | The bright part of the small picture is what stays. |
+| Get stills from a video | **Image sequence** | Open the video. Choose fewer than every frame. |
+| Make a video from numbered pictures | **Image sequence** | Open the *first* picture of the series. |
+| See a whole video at a glance | **Contact sheet** | Columns × rows = number of frames. |
+| Time-lapse or slow motion | **Change speed** | Slow motion needs a high frame rate to look smooth. |
+| Hand work to an editor | **Export for editing** | ProRes 422 if unsure. The file will be very large. |
 
 | Button | Does |
 |---|---|

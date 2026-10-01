@@ -1,6 +1,6 @@
 # avOpenKit — Specifications
 
-Rev I · **agreed by Rajiv Tyagi, 2026-10-01** (Rev F), amended with his decisions of the same day · T&C Technology · **internal project** — costing
+Rev K · **agreed by Rajiv Tyagi, 2026-10-01** (Rev F), amended with his decisions of the same day · T&C Technology · **internal project** — costing
 sheets waived
 
 ## Revision history
@@ -16,6 +16,8 @@ sheets waived
 | G | 2026-10-01 | D9 decided after the Linux preview trial (DESIGN.md §1.1): Qt's media player for the preview, with single frames from FFmpeg as the fallback. §7 corrected: the `ffmpeg` program is not shipped on Linux, but Qt's media libraries (which include FFmpeg libraries) are shipped in packaged builds on both platforms. New F18. |
 | H | 2026-10-01 | Audience stated by Rajiv: **the program serves visual artists, and its interface must be visually rich.** Visual artist added to §2; new F19 (visual feedback) and N9 (visual design). Candidate tasks for artists listed in §3 for decision. |
 | I | 2026-10-01 | Decided by Rajiv: the five artist tasks are accepted (T9–T13 in §3, not yet written); the built User Guide documents are kept in the repository; downloads are published for anyone. §7 names the FFmpeg supplied with the Windows download and how each release meets its obligations. |
+| J | 2026-10-01 | Tasks T9–T13 written; §3 gives what each asks and how it works. A result can now be a folder (T10), which is created only after checking that it does not exist and is never an existing one. |
+| K | 2026-10-01 | Decided by Rajiv: released downloads are built on the development machine (Linux in an Ubuntu 22.04 container, Windows in the Windows 11 VM) and published from there; the GitHub Actions build is kept as an independent check on every push. §6 updated. Version 0.2.0. |
 
 ## 1. Purpose
 
@@ -43,8 +45,8 @@ It is not an editor. There is no timeline, no project file and no effects librar
 
 ## 3. Guided tasks — version 1
 
-Every task takes one or more input files and writes **new** output files. All eight tasks,
-T1–T8, are in version 1.
+Every task takes one or more input files and writes **new** output files. Tasks T1–T8 were
+the agreed version 1 list; T9–T13, below, were added for the visual-artist audience.
 
 | # | Task | What the user chooses | Method |
 |---|---|---|---|
@@ -57,15 +59,15 @@ T1–T8, are in version 1.
 | T7 | **Make a GIF** | Section, width, frame rate | Two-step `palettegen` / `paletteuse` for correct colours. Estimated file size shown before running. |
 | T8 | **Subtitles** | An `.srt` / `.ass` file; *burn in* or *add as track* | Burn in: `subtitles` filter (re-encode). Add as track: mux without re-encoding video. |
 
-**Accepted by Rajiv on 2026-10-01, for the visual-artist audience — not yet written:**
+**Accepted by Rajiv on 2026-10-01, for the visual-artist audience, and written the same day:**
 
-| # | Task | What it does |
-|---|---|---|
-| T9 | **Crop to a shape** | Cut the picture to a shape for sharing: square, 4:5 or 9:16. |
-| T10 | **Image sequence** | Turn a numbered sequence of images into a video, and a video into images. |
-| T11 | **Contact sheet** | Lay frames from a video out as one picture. |
-| T12 | **Change speed** | Time-lapse and slow motion. |
-| T13 | **Export for editing** | Save as an editing format (ProRes) for handing work to an editor. |
+| # | Task | What the user chooses | Method |
+|---|---|---|---|
+| T9 | **Crop to a shape** | Shape (square, 4:5, 9:16) and which part to keep, shown on a picture of the video | `crop` to the largest piece of that shape; video re-encoded, sound copied. |
+| T10 | **Image sequence** | A video open: picture format, and how many per second. A picture open: pictures per second | A video into a new folder of numbered pictures; or the numbered series the open picture belongs to, into an H.264 video. The direction follows the kind of file that is open. |
+| T11 | **Contact sheet** | Columns, rows, width of each frame, JPEG or PNG | One seek per frame, then `tile`, so a long film costs no more than a short clip. |
+| T12 | **Change speed** | Faster or slower, with or without sound | `setpts` for the picture and `atempo` for the sound, which keeps its pitch. Frames are dropped or repeated; none are interpolated. |
+| T13 | **Export for editing** | ProRes Proxy, LT, 422 or HQ | `prores_ks`, 10-bit 4:2:2, uncompressed sound, in a MOV file. |
 
 Candidates for a later version, not in version 1: crop, resize, change speed, loudness
 normalisation (`loudnorm`), mute/replace audio, extract frames as images, video from an image
@@ -207,10 +209,13 @@ command line.
 - **Form of the downloads.** Linux: one file, without FFmpeg, built on Ubuntu 22.04 so that it
   runs on that and newer systems. Windows: a zipped folder with `avOpenKit.exe` and FFmpeg
   inside — a folder rather than one file, because a single file would unpack about 300 MB to a
-  temporary folder at every start. Both are built, tested and published by
-  `.github/workflows/build.yml`; a tag starting with `v` publishes a release.
+  temporary folder at every start. The released files are built on the development machine (Linux in an
+  Ubuntu 22.04 container, Windows in the Windows 11 VM) and published with
+  `packaging/release_local.sh`; `.github/workflows/build.yml` builds and tests both on every
+  push as an independent check, and publishes only when run by hand.
 - Packaging: PyInstaller builds for Linux and Windows from a GitHub Actions matrix, as
-  DigiPotLab does.
+  DigiPotLab does. The same two downloads can also be built on the development machine without
+  GitHub: Linux in an Ubuntu 22.04 container, Windows in the Windows 11 VM (see README).
 - Windows builds cannot be tested under Wine on this machine (Wine does not load Qt6); they are
   tested in the Windows 11 VM.
 

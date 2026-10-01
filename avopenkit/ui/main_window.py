@@ -44,6 +44,13 @@ def human_size(n: int) -> str:
     return ""
 
 
+def path_size(path: Path) -> int:
+    """Size of a file, or of everything in a folder (a result can be a folder of pictures)."""
+    if path.is_dir():
+        return sum(f.stat().st_size for f in path.rglob("*") if f.is_file())
+    return path.stat().st_size
+
+
 class MainWindow(QMainWindow):
     def __init__(self, tools: Tools) -> None:
         super().__init__()
@@ -110,7 +117,7 @@ class MainWindow(QMainWindow):
             item.setToolTip(panel.blurb())
             if isinstance(panel, JoinPanel):
                 panel.request_probe.connect(self._add_join_clips)
-        self.tasks.setMinimumHeight(len(self.panels) * 58 + 8)
+        self.tasks.setMinimumHeight(len(self.panels) * TaskDelegate.HEIGHT + 8)
         self.tasks.currentRowChanged.connect(self._task_changed)
 
         self.queue_list = QListWidget()
@@ -403,6 +410,8 @@ class MainWindow(QMainWindow):
                          size.width(), size.height())
             pm.setDevicePixelRatio(ratio)
             self.thumb.setPixmap(rounded(pm, 6))
+            for panel in self.panels:
+                panel.set_poster(image)
             return
         if self.media is None:
             name = "drop"
@@ -941,8 +950,7 @@ class MainWindow(QMainWindow):
             out = item.result
             if out is not None:
                 self._result = out
-                text = self.tr("Done: {0} ({1})").format(out.name,
-                                                         human_size(out.stat().st_size))
+                text = self.tr("Done: {0} ({1})").format(out.name, human_size(path_size(out)))
                 if item.source_size:
                     text += self.tr(" - the original is {0}").format(
                         human_size(item.source_size))

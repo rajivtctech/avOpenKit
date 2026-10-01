@@ -73,6 +73,28 @@ def hw_note(hw) -> list[str]:
                                "file size.").format(hw.label)]
 
 
+H264_CONTAINERS = {".mp4", ".m4v", ".mov", ".mkv"}
+
+
+def h264_target(media: MediaInfo) -> str:
+    """The file ending for a result re-encoded to H.264: the source's own when that type can
+    hold H.264, otherwise MP4."""
+    ext = media.path.suffix
+    return ext if ext.lower() in H264_CONTAINERS else ".mp4"
+
+
+def shown_size(media: MediaInfo) -> tuple[int, int]:
+    """Width and height as the picture is displayed, allowing for a stored quarter turn.
+    FFmpeg applies the stored rotation before any filter, so filters see this size."""
+    v = media.video
+    return (v.height, v.width) if abs(v.rotation) % 180 == 90 else (v.width, v.height)
+
+
+def number(value: float) -> str:
+    """A number for the command line without trailing zeros: 2, 0.5, 1.25."""
+    return f"{value:.4f}".rstrip("0").rstrip(".")
+
+
 def secs(value: float) -> str:
     """Seconds as FFmpeg takes them on the command line."""
     return f"{value:.3f}"

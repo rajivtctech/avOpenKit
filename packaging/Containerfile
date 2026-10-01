@@ -1,0 +1,32 @@
+# The build environment for the Linux download: Ubuntu 22.04, so that the file runs on 22.04
+# and everything newer (a binary needs a C library at least as new as the one it was built with).
+#
+# libxrandr2 matters: Qt's media plug-in links to it. Without it the plug-in does not load, the
+# preview player is unavailable, and the library is not carried into the packaged program.
+#
+# Everything the build needs is put into the image here, so a build itself uses no network.
+#   podman build -t avopenkit-build:22.04 -f packaging/Containerfile packaging
+FROM docker.io/library/ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive LANG=C.UTF-8
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        python3 python3-venv python3-pip libpython3.10 binutils ca-certificates curl xz-utils \
+        libegl1 libgl1 libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 \
+        libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-xinerama0 \
+        libxcb-xfixes0 libdbus-1-3 libfontconfig1 libpulse0 libasound2 libglib2.0-0 \
+        libxrandr2 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Ubuntu 22.04's own FFmpeg is 4.4, older than avOpenKit needs. This one is used only to run
+# the tests and the self-test inside the container; the Linux download does not contain FFmpeg.
+RUN curl -sSL -o /tmp/ffmpeg.tar.xz \
+        https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n9.0-latest-linux64-gpl-9.0.tar.xz \
+    && mkdir -p /opt/ffmpeg && tar -xJf /tmp/ffmpeg.tar.xz -C /opt/ffmpeg --strip-components=1 \
+    && rm -rf /tmp/ffmpeg.tar.xz /opt/ffmpeg/doc /opt/ffmpeg/bin/ffplay
+ENV PATH=/opt/ffmpeg/bin:$PATH
+
+RUN python3 -m venv /opt/venv \
+    && /opt/venv/bin/pip install --no-cache-dir --upgrade pip \
+    && /opt/venv/bin/pip install --no-cache-dir PyQt6 pyinstaller pytest
+ENV PATH=/opt/venv/bin:$PATH QT_QPA_PLATFORM=offscreen
+WORKDIR /work

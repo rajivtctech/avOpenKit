@@ -235,14 +235,16 @@ class Timeline(QSlider):
 class TaskDelegate(QStyledItemDelegate):
     """Draws each task as a card: its icon, its name, and a line saying what it does."""
 
+    HEIGHT = 46        # thirteen tasks have to fit beside the queue
+
     def sizeHint(self, option, index) -> QSize:
-        return QSize(220, 58)
+        return QSize(220, self.HEIGHT)
 
     def paint(self, painter, option, index) -> None:
         t = theme.current()
         painter.save()
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        rect = QRectF(option.rect).adjusted(6, 3, -6, -3)
+        rect = QRectF(option.rect).adjusted(6, 2, -6, -2)
         selected = bool(option.state & QStyle.StateFlag.State_Selected)
         hovered = bool(option.state & QStyle.StateFlag.State_MouseOver)
         enabled = bool(option.state & QStyle.StateFlag.State_Enabled)
@@ -257,23 +259,23 @@ class TaskDelegate(QStyledItemDelegate):
 
         name = index.data(ICON_ROLE)
         tint = t["accent"] if selected else t["muted"] if enabled else t["faint"]
-        tile = QRectF(rect.left() + 9, rect.center().y() - 17, 34, 34)
+        tile = QRectF(rect.left() + 8, rect.center().y() - 15, 30, 30)
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(QColor(t["accent"] if selected else t["raised"]))
         painter.drawRoundedRect(tile, 8, 8)
         if name:
-            pm = icons.pixmap(name, t["accent_text"] if selected else tint, 22)
-            painter.drawPixmap(QRectF(tile.center().x() - 11, tile.center().y() - 11, 22, 22),
+            pm = icons.pixmap(name, t["accent_text"] if selected else tint, 20)
+            painter.drawPixmap(QRectF(tile.center().x() - 10, tile.center().y() - 10, 20, 20),
                                pm, QRectF(pm.rect()))
 
         left = int(tile.right() + 11)
         width = int(rect.right() - left - 6)
         title = QFont(option.font)
-        title.setPointSizeF(10.5)
+        title.setPointSizeF(10.0)
         title.setWeight(QFont.Weight.DemiBold)
         painter.setFont(title)
         painter.setPen(QColor(t["text"] if enabled else t["faint"]))
-        painter.drawText(QRect(left, int(rect.top() + 8), width, 20),
+        painter.drawText(QRect(left, int(rect.top() + 3), width, 18),
                          Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
                          index.data(Qt.ItemDataRole.DisplayRole))
         blurb = QFont(option.font)
@@ -282,7 +284,7 @@ class TaskDelegate(QStyledItemDelegate):
         painter.setPen(QColor(t["muted"] if enabled else t["faint"]))
         text = painter.fontMetrics().elidedText(index.data(BLURB_ROLE) or "",
                                                 Qt.TextElideMode.ElideRight, width)
-        painter.drawText(QRect(left, int(rect.top() + 28), width, 18),
+        painter.drawText(QRect(left, int(rect.top() + 20), width, 16),
                          Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, text)
         painter.restore()
 
@@ -421,6 +423,59 @@ class FlowLayout(QLayout):
             x += hint.width() + self._gap
             row = max(row, hint.height())
         return y + row - rect.y()
+
+
+class CropView(QLabel):
+    """Shows a frame of the video with the part that will be kept lit and the rest dimmed."""
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self.setMinimumSize(240, 150)
+        self.setObjectName("thumb")
+        self._image: QImage | None = None
+        self._box: tuple[float, float, float, float] | None = None   # x, y, w, h as fractions
+
+    def set_image(self, image: QImage | None) -> None:
+        self._image = image if image is not None and not image.isNull() else None
+        self.update()
+
+    def set_box(self, box: tuple[float, float, float, float] | None) -> None:
+        self._box = box
+        self.update()
+
+    def box(self):
+        return self._box
+
+    def paintEvent(self, _event) -> None:
+        t = theme.current()
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+        p.fillRect(self.rect(), QColor(t["sunken"]))
+        if self._image is None:
+            p.setPen(QColor(t["faint"]))
+            p.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, self.text())
+            p.end()
+            return
+        area = QRectF(self.rect()).adjusted(6, 6, -6, -6)
+        scale = min(area.width() / self._image.width(), area.height() / self._image.height())
+        w, h = self._image.width() * scale, self._image.height() * scale
+        frame = QRectF(area.center().x() - w / 2, area.center().y() - h / 2, w, h)
+        p.drawImage(frame, self._image)
+        if self._box is not None:
+            x, y, bw, bh = self._box
+            keep = QRectF(frame.left() + x * w, frame.top() + y * h, bw * w, bh * h)
+            dim = QColor(t["bg"])
+            dim.setAlpha(200)
+            outside = QPainterPath()
+            outside.addRect(frame)
+            inside = QPainterPath()
+            inside.addRect(keep)
+            p.fillPath(outside.subtracted(inside), dim)
+            p.setPen(QPen(QColor(t["accent"]), 2))
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            p.drawRect(keep)
+        p.end()
 
 
 def chip(text: str) -> QLabel:

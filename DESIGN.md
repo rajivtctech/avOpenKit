@@ -1,6 +1,6 @@
 # avOpenKit — Design
 
-Draft 12 · 2026-10-01 · implements SPECIFICATIONS.md Rev I · first code increment written, see §7
+Draft 12 · 2026-10-01 · implements SPECIFICATIONS.md Rev J · first code increment written, see §7
 
 Everything marked *tested* was run on this machine (Ubuntu 26.04, FFmpeg 8.0.1, Python 3.14.4,
 PyQt6 6.11.0 from pip in `.venv`) by the scripts in `trials/`. Anything not marked is a proposal.
@@ -294,15 +294,16 @@ The audience is visual artists, so the look is designed, not left to the toolkit
    worked in the trial; whether it can meet the source-hosting obligation is not yet checked.
 5. Preview trial on 4K and HEVC sources.
 
-## 7. Code status — first increment (0.1.0)
+## 7. Code status (0.2.0)
 
-Written and tested (261 tests: unit, real FFmpeg runs checked with `ffprobe`, and the window
+Written and tested (304 tests: unit, real FFmpeg runs checked with `ffprobe`, and the window
 and preview driven without a display):
 
 - `core/`: FFmpeg detection (F15, F16 path search), probing with keyframe times, job and plan
   model, progress parsing, blocking and `QProcess` runners with cancel (F5, F6), plain-language
   error explanations (F7).
-- `tasks/`: all eight tasks T1–T8 as settings → argument list, with the "what will happen" notes.
+- `tasks/`: all thirteen tasks T1–T13 as settings → argument list, with the "what will happen"
+  notes. The five artist tasks' commands were first run by `trials/artist_tasks_trial.sh`.
 - `ui/`: main window with task list, file inspector (F4), one form per task, result path that
   never defaults to an input (F3), live command console with Copy (F1), progress, cancel,
   result line with Play and Open folder (F9), drag and drop (F11).
@@ -342,12 +343,53 @@ and preview driven without a display):
 
 - Downloads for anyone: `.github/workflows/build.yml` builds on Ubuntu 22.04 and on Windows,
   runs the tests, builds with `avopenkit.spec`, runs the packaged program's `--self-test` on a
-  generated clip, and on a `v*` tag publishes a release with both downloads, the User Guide,
+  generated clip, and — only when run by hand on a `v*` tag with "publish" ticked (since
+  0.2.0; 0.1.0 was published by the tag itself) — publishes a release with both downloads, the User Guide,
   the FFmpeg source archive, the notices and checksums. On Windows the self-test must also
   report that the program used its own bundled FFmpeg. The Windows tests are reported but do
   not stop the build; the self-test does.
 
-Not yet written: the translations themselves; the five artist tasks T9–T13 (spec §3).
+- Building on this machine instead of on GitHub (1 Oct 2026):
+  - Linux: `packaging/build_linux_container.sh` builds in an Ubuntu 22.04 container (podman,
+    rootless; image from `packaging/Containerfile`, 1.02 GB), so the file runs on 22.04 and
+    newer, as GitHub's does. The build itself runs with the network off. Measured here: tests
+    297 passed and 7 skipped under Python 3.10, build and both self-tests (in the container,
+    then on Ubuntu 26.04) in 2.5 minutes, 69 MB file. The container carries a static FFmpeg
+    for the tests only; it is not put in the program. `packaging/build_linux.sh` still builds
+    directly on the host, for a quick file that need only run here.
+  - Windows: `packaging/build_windows_vm.sh` builds inside the local Windows 11 virtual
+    machine and self-tests there. The VM's account has no password, so the script cannot use
+    `vmrun runProgramInGuest`; it puts `b.cmd` on a CD image and types Win+R, `d:\b`, Enter.
+    It uses a Python already in the VM if there is one: the Python installer does not put a
+    second copy of the same version in another folder, which is what failed on the first run.
+    Measured: about 4 minutes, 126 MB zip, self-test passed with the bundled FFmpeg.
+  - Publishing: `packaging/release_local.sh` checks that both files in `dist/` report the
+    current version, adds the guide PDFs, the FFmpeg source archive (the same file as hosted
+    with v0.1.0), the notices and checksums, and creates the GitHub release with `gh`. Rajiv's
+    decision, 1 Oct 2026: releases carry the locally built files; the GitHub build stays as
+    an independent check on every push.
+
+Notes on the artist tasks (T9–T13):
+
+- **A result can be a folder** (video to pictures). The task refuses a folder that exists, so
+  pictures are never mixed into one. The job itself carries the folder to create
+  (`Job.make_dirs`), and the runner creates it only *after* its existing-result check; creating
+  it earlier made that check refuse the job's own folder. A folder made by a job that fails or
+  is cancelled is removed, like any partial result.
+- **Crop works on the picture as displayed.** FFmpeg applies a stored rotation before filters,
+  so the crop is computed from the displayed size (`shown_size`), and the form's small picture —
+  the file's thumbnail with the kept part lit — uses the same numbers as the command.
+- **Contact sheet by seeking.** One `-ss … -i` per frame, each trimmed to its first frame, then
+  `concat` and `tile`: one second on the trial clip. Decoding the whole file to pick frames
+  would be simpler to write and far slower on a long film.
+- **Slow motion below half speed** chains `atempo` halves, because one step accepts 0.5 to 100.
+- **Odd picture sizes** are rounded down to even when pictures are made into a video. The same
+  fault remains in the tasks that re-encode a video with an odd size (see below).
+- Each of these tasks has an icon, a form with a short explanation on every option, expert
+  options, presets, hover explanations for every word of its command, and a section in the
+  User Guide — all checked by the same coverage tests as the first eight.
+
+Not yet written: the translations themselves.
 
 Found while writing the guide: re-encoding a video whose width or height is odd fails in
 libx264, and no task corrects it. The guide gives the expert-mode workaround

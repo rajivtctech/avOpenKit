@@ -13,6 +13,7 @@ from . import __version__, languages
 from .core import ffmpeg
 from .ui import icons, theme
 from .ui.main_window import MainWindow
+from .ui.panels import PANELS
 
 
 def self_test(path: str | None) -> int:
@@ -67,7 +68,7 @@ def self_test(path: str | None) -> int:
           f"{len(tools.filters)} filters; supplied with avOpenKit: {ffmpeg.is_bundled(tools)}")
     window = MainWindow(tools)
     print(f"window: {window.tasks.count()} tasks")
-    ok = window.tasks.count() == 8
+    ok = window.tasks.count() == len(PANELS)
     # The icons are drawn from SVG at run time; a packaged build that lost Qt's SVG support
     # would show empty squares.
     drawn = icons.pixmap("trim", "#ffffff", 24).toImage()
