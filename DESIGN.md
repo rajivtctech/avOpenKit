@@ -1,6 +1,6 @@
 # avOpenKit — Design
 
-Draft 4 · 2026-10-01 · implements SPECIFICATIONS.md Rev G · first code increment written, see §7
+Draft 5 · 2026-10-01 · implements SPECIFICATIONS.md Rev G · first code increment written, see §7
 
 Everything marked *tested* was run on this machine (Ubuntu 26.04, FFmpeg 8.0.1, Python 3.14.4,
 PyQt6 6.11.0 from pip in `.venv`) by the scripts in `trials/`. Anything not marked is a proposal.
@@ -89,6 +89,30 @@ Consequences for the design:
   existing output before starting FFmpeg, and on failure deletes only files this run created.
 - **T8 burn-in** output has to be looked at, per script, before each language is released.
 
+### 1.3 Qt player hang when stopped with sound attached — `trials/player_stop_hang.py`
+
+Found while testing the preview: `QMediaPlayer.stop()` occasionally never returns, freezing the
+window. The main thread blocks inside Qt with Qt's audio-renderer thread still alive.
+
+| Condition | Result |
+|---|---|
+| Audio output attached (muted or not), load → pause → stop | about 1 batch of 150 cycles in 4 hung |
+| No audio output attached, same sequence | no hang in over 1000 cycles |
+| Application tests before the fix | 1 run in 6 hung, in `PreviewWidget.unload()` |
+| Application tests after the fix | 12 consecutive runs clean |
+
+Seen with PyQt6 6.11.0 / PyQt6-Qt6 6.11.2 on Ubuntu 26.04, PulseAudio on PipeWire 1.6.2. Not
+tested: other Qt versions, Windows. Changing Qt's audio back end (`QT_AUDIO_BACKEND`) gave no
+clear difference in the runs made.
+
+**Fix in the code:** the audio output is attached only when Play is first pressed. Scrubbing and
+"Start here / End here", which is most of what the preview is for, never have one attached.
+
+**Residual risk:** after Play has been pressed once, a later stop (opening another file, closing
+the window) goes through the same Qt code and could hang, at roughly the rate above. Not yet
+mitigated. Options if it shows up in use: make the preview silent, or move the player into a
+helper process that can be killed.
+
 ## 2. Structure
 
 ```
@@ -176,8 +200,8 @@ re-encodes and anything that will differ from what was asked.
 
 ## 7. Code status — first increment (0.1.0)
 
-Written and tested (89 tests: unit, real FFmpeg runs checked with `ffprobe`, and the window
-driven without a display):
+Written and tested (98 tests: unit, real FFmpeg runs checked with `ffprobe`, and the window
+and preview driven without a display):
 
 - `core/`: FFmpeg detection (F15, F16 path search), probing with keyframe times, job and plan
   model, progress parsing, blocking and `QProcess` runners with cancel (F5, F6), plain-language
@@ -186,11 +210,17 @@ driven without a display):
 - `ui/`: main window with task list, file inspector (F4), one form per task, result path that
   never defaults to an input (F3), live command console with Copy (F1), progress, cancel,
   result line with Play and Open folder (F9), drag and drop (F11).
+- `ui/preview.py` (F18): scrub bar, Play/Pause, Mute, Qt player with automatic fallback to
+  FFmpeg stills (on a player error, no picture within 4 s, or a length that disagrees with
+  `ffprobe` by more than 1 s). Shown for Trim and Make a GIF, with "Start here" / "End here"
+  buttons; typing a time shows that moment.
 - All interface text goes through Qt's translation calls; `pylupdate6` extracts 180 strings.
 
-Not yet written: preview player (F18), edit-before-run and simple/expert modes (F2, F13), job
+Not yet written: edit-before-run and simple/expert modes (F2, F13), job
 queue (F8), presets (F10), hover explanations of command parts (F12), hardware encoding (F14),
 Settings and About (F16, F17), translations, Windows packaging with bundled FFmpeg, User Guide.
 
-Known limits of this increment: probing reads keyframe times on the window's thread, which
-will pause the window on very long files; the Windows build has not been run.
+Known limits: probing reads keyframe times on the window's thread, which will pause the
+window on very long files; the Windows build has not been run; the preview has only been
+run without a display and never on Windows, 4K or HEVC material; keyframe positions are not
+marked on the scrub bar; the residual hang risk in §1.3.

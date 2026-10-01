@@ -20,6 +20,7 @@ from ..core.probe import MediaInfo, ProbeError, probe
 from ..core.runner import JobRunner
 from ..tasks.base import TaskError, clock
 from .panels import MEDIA_FILTER, PANELS, JoinPanel
+from .preview import PreviewWidget
 
 
 def human_size(n: int) -> str:
@@ -41,7 +42,7 @@ class MainWindow(QMainWindow):
         self.runner = JobRunner(tools, self)
         self.setWindowTitle("avOpenKit")
         self.setAcceptDrops(True)
-        self.resize(1000, 720)
+        self.resize(1000, 900)
         self._build()
         self.runner.progress.connect(self._on_progress)
         self.runner.log.connect(self._on_log)
@@ -56,9 +57,12 @@ class MainWindow(QMainWindow):
         self.tasks = QListWidget()
         self.tasks.setMaximumWidth(190)
         self.stack = QStackedWidget()
+        self.preview = PreviewWidget(self.tools)
+        self.preview.setVisible(False)
         self.panels = []
         for cls in PANELS:
             panel = cls()
+            panel.attach_preview(self.preview)
             panel.changed.connect(self.refresh)
             self.panels.append(panel)
             self.stack.addWidget(panel)
@@ -145,6 +149,7 @@ class MainWindow(QMainWindow):
         right.addLayout(file_row)
         right.addWidget(self.inspector)
         right.addWidget(self.blurb)
+        right.addWidget(self.preview, 2)
         right.addWidget(self.stack)
         right.addLayout(out_row)
         right.addWidget(self.notes)
@@ -201,6 +206,7 @@ class MainWindow(QMainWindow):
             panel.set_media(media)
         self._output_custom = False
         self._clear_result()
+        self._sync_preview()
         self.refresh()
         return True
 
@@ -249,7 +255,17 @@ class MainWindow(QMainWindow):
         self.stack.setCurrentIndex(row)
         self.blurb.setText(self.panel().blurb())
         self._output_custom = False
+        self._sync_preview()
         self.refresh()
+
+    def _sync_preview(self) -> None:
+        """Show the preview for tasks that select a section, loaded with the open file."""
+        wanted = self.panel().uses_preview and self.media is not None
+        if wanted and self.preview.media is not self.media:
+            self.preview.load(self.media)
+        elif not wanted:
+            self.preview.pause()
+        self.preview.setVisible(wanted)
 
     def _output_edited(self) -> None:
         self._output_custom = True
@@ -312,6 +328,7 @@ class MainWindow(QMainWindow):
         self.log.clear()
         self.progress.setRange(0, 1000)
         self.progress.setValue(0)
+        self.preview.pause()
         self._set_running(True)
         self.runner.start(self.plan, overwrite)
 
@@ -375,5 +392,6 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event) -> None:
         if self.runner.running:
             self.runner.cancel()
+        self.preview.unload()
         shutil.rmtree(self._workdir, ignore_errors=True)
         super().closeEvent(event)

@@ -31,11 +31,36 @@ class TaskPanel(QWidget):
 
     changed = pyqtSignal()
     module = None
+    uses_preview = False          # True for tasks that select a section of the file (F18)
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self.media: MediaInfo | None = None
+        self.preview = None
         self.form = QFormLayout(self)
+
+    def attach_preview(self, preview) -> None:
+        self.preview = preview
+
+    def _time_row(self, box: QDoubleSpinBox, button_text: str) -> QHBoxLayout:
+        """A seconds box with a button that sets it from the preview's current position."""
+        button = QPushButton(button_text)
+        button.clicked.connect(lambda: self._take_position(box))
+        box.valueChanged.connect(self._show_in_preview)
+        row = QHBoxLayout()
+        row.addWidget(box, 1)
+        row.addWidget(button)
+        return row
+
+    def _take_position(self, box: QDoubleSpinBox) -> None:
+        if self.preview is not None and self.preview.media is not None:
+            box.setValue(round(self.preview.position(), 2))
+
+    def _show_in_preview(self, seconds: float) -> None:
+        """Typing a time shows that moment, so the cut point can be seen."""
+        if (self.preview is not None and self.preview.media is not None and self.isVisible()
+                and abs(self.preview.position() - seconds) > 0.02):
+            self.preview.seek(seconds)
 
     def title(self) -> str:
         raise NotImplementedError
@@ -64,6 +89,7 @@ class TaskPanel(QWidget):
 
 class TrimPanel(TaskPanel):
     module = trim
+    uses_preview = True
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -71,8 +97,8 @@ class TrimPanel(TaskPanel):
         self.fast, self.exact = self._radio_pair(
             self.tr("Fast - no quality loss, starts on a keyframe"),
             self.tr("Exact - re-encodes, cuts exactly where asked"))
-        self.form.addRow(self.tr("Start"), self.start)
-        self.form.addRow(self.tr("End"), self.end)
+        self.form.addRow(self.tr("Start"), self._time_row(self.start, self.tr("Start here")))
+        self.form.addRow(self.tr("End"), self._time_row(self.end, self.tr("End here")))
         self.form.addRow(self.tr("Method"), self.fast)
         self.form.addRow("", self.exact)
         self.start.valueChanged.connect(self.changed)
@@ -291,6 +317,7 @@ class RotatePanel(TaskPanel):
 
 class GifPanel(TaskPanel):
     module = gif
+    uses_preview = True
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -304,7 +331,7 @@ class GifPanel(TaskPanel):
         self.fps = QSpinBox()
         self.fps.setRange(1, 60)
         self.fps.setValue(12)
-        self.form.addRow(self.tr("Start"), self.start)
+        self.form.addRow(self.tr("Start"), self._time_row(self.start, self.tr("Start here")))
         self.form.addRow(self.tr("Length"), self.length)
         self.form.addRow(self.tr("Width"), self.width)
         self.form.addRow(self.tr("Frames per second"), self.fps)
