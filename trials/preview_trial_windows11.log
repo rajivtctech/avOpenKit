@@ -1,0 +1,76 @@
+trial start 01-10-2026 17:38:10.38 
+
+Microsoft Windows [Version 10.0.26200.8037]
+python installer exit 0 
+Python 3.14.8
+Looking in links: d:\wheels
+Processing .\wheels\pyqt6-6.11.0-cp310-abi3-win_amd64.whl
+Processing .\wheels\pyqt6_sip-13.12.0-cp314-cp314-win_amd64.whl (from PyQt6)
+Processing .\wheels\pyqt6_qt6-6.11.2-py3-none-win_amd64.whl (from PyQt6)
+Installing collected packages: PyQt6-Qt6, PyQt6-sip, PyQt6
+  WARNING: The scripts pylupdate6.exe and pyuic6.exe are installed in 'C:\avtrial\py\Scripts' which is not on PATH.
+  Consider adding this directory to PATH or, if you prefer to suppress this warning, use --no-warn-script-location.
+
+Successfully installed PyQt6-6.11.0 PyQt6-Qt6-6.11.2 PyQt6-sip-13.12.0
+ffmpeg version 9.0.2-essentials_build-www.gyan.dev Copyright (c) 2000-2026 the FFmpeg developers
+built with gcc 16.2.0 (Rev3, Built by MSYS2 project)
+configuration: --enable-gpl --enable-version3 --enable-static --disable-w32threads --disable-autodetect --enable-cairo --enable-fontconfig --enable-iconv --enable-gnutls --enable-libxml2 --enable-gmp --enable-bzlib --enable-lzma --enable-zlib --enable-libsrt --enable-libssh --enable-libzmq --enable-avisynth --enable-sdl2 --enable-libwebp --enable-libx264 --enable-libx265 --enable-libxvid --enable-libaom --enable-libopenjpeg --enable-libvpx --enable-mediafoundation --enable-libass --enable-libfreetype --enable-libfribidi --enable-libharfbuzz --enable-libvidstab --enable-libvmaf --enable-libzimg --enable-amf --enable-cuda-llvm --enable-cuvid --enable-dxva2 --enable-d3d11va --enable-d3d12va --enable-ffnvcodec --enable-libvpl --enable-nvdec --enable-nvenc --enable-vaapi --enable-openal --enable-libgme --enable-libopenmpt --enable-libopencore-amrwb --enable-libmp3lame --enable-libtheora --enable-libvo-amrwbenc --enable-libgsm --enable-libopencore-amrnb --enable-libopus --enable-libspeex --enable-libvorbis --enable-librubberband
+libavutil      61.  1.102 / 61.  1.102
+libavcodec     63.  1.102 / 63.  1.102
+libavformat    63.  1.102 / 63.  1.102
+libavdevice    63.  1.102 / 63.  1.102
+libavfilter    12.  1.102 / 12.  1.102
+libswscale     10.  1.102 / 10.  1.102
+libswresample   7.  1.102 /  7.  1.102
+
+Exiting with exit code 0
+qt.multimedia.ffmpeg: Using Qt multimedia with FFmpeg version 7.1.5 LGPL version 2.1 or later
+Input #0, mov,mp4,m4a,3gp,3g2,mj2, from 'C:/Users/rajiv/AppData/Local/Temp/tmpf4f8hq92/clip.mp4':
+  Metadata:
+    major_brand     : isom
+    minor_version   : 512
+    compatible_brands: isomiso2avc1mp41
+    encoder         : Lavf63.1.102
+  Duration: 00:00:20.00, start: 0.000000, bitrate: 2788 kb/s
+  Stream #0:0[0x1](und): Video: h264 (High) (avc1 / 0x31637661), yuv420p(progressive), 1280x720 [SAR 1:1 DAR 16:9], 2710 kb/s, 30 fps, 30 tbr, 15360 tbn (default)
+      Metadata:
+        handler_name    : VideoHandler
+        vendor_id       : [0][0][0][0]
+        encoder         : Lavc63.1.102 libx264
+  Stream #0:1[0x2](und): Audio: aac (LC) (mp4a / 0x6134706D), 44100 Hz, mono, fltp, 69 kb/s (default)
+      Metadata:
+        handler_name    : SoundHandler
+        vendor_id       : [0][0][0][0]
+[h264_mf @ 000001CF753A1E80] MFT name: 'H264 Encoder MFT'
+[hevc_mf @ 000001CF753A1E80] MFT name: 'HEVCVideoExtensionEncoder'
+[h264 @ 000001CF75462A40] Failed setup for format d3d11: hwaccel initialisation returned error.
+[h264 @ 000001CF75462A40] Failed setup for format d3d11: hwaccel initialisation returned error.
+[h264 @ 000001CF75462A40] Failed setup for format d3d11: hwaccel initialisation returned error.
+[h264 @ 000001CF75462A40] Failed setup for format d3d11: hwaccel initialisation returned error.
+[h264 @ 000001CF75462A40] Failed setup for format d3d11: hwaccel initialisation returned error.
+[h264 @ 000001CF75462A40] Failed setup for format d3d11: hwaccel initialisation returned error.
+[h264 @ 000001CF75462A40] Failed setup for format d3d11: hwaccel initialisation returned error.
+[h264 @ 000001CF75462A40] Failed setup for format d3d11: hwaccel initialisation returned error.
+[h264 @ 000001CF75462A40] Failed setup for format d3d11: hwaccel initialisation returned error.
+A. Qt Multimedia (QMediaPlayer + QVideoSink)
+  loaded in 13 ms, duration 20000 ms, seekable True
+  requested  frame-start  error  time
+         0           0      +0     33 ms
+       500         467     -33     53 ms
+      1990        1967     -23     87 ms
+      2000        2000      +0     33 ms
+      3333        3300     -33     69 ms
+      7777        7767     -10     91 ms
+     12345       12333     -12     60 ms
+     19000       18967     -33     72 ms
+B. ffmpeg single-frame grab
+  requested  bytes   time
+         0   691215     96 ms  ok
+       500   691215    105 ms  ok
+      1990   691215    125 ms  ok
+      2000   691215     86 ms  ok
+      3333   691215    119 ms  ok
+      7777   691215    140 ms  ok
+     12345   691215     91 ms  ok
+     19000   691215    113 ms  ok
+trial end 01-10-2026 17:38:52.42 exit 0 
